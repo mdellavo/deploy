@@ -1,34 +1,110 @@
-SHELL_STACK  = {
+import os.path
+
+# Zones
+
+QUUUX_STACK = {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Zone configurations",
+
+    "Resources": {
+        "Zone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": "quuux.org"
+            }
+        },
+    },
+}
+
+
+# Website config
+
+STATIC_WEBSITES = [
+    # (path, bucket)
+    (os.path.expanduser("~/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
+]
+
+WEBSITE_STACK = {
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Website configurations",
+
+    "Resources": {
+
+        "ZoneMarcDellaVolpe": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": "marcdellavolpe.com"
+            }
+        },
+
+        "BucketMarcDellaVolpeCom": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": "marcdellavolpe.com",
+                "AccessControl": "PublicRead",
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html"
+                }
+            }
+        },
+
+        "Hosts": {
+            "Type": "AWS::Route53::RecordSetGroup",
+            "DependsOn": "ZoneMarcDellaVolpe",
+            "Properties": {
+                "HostedZoneName": "marcdellavolpe.com.",
+                "RecordSets": [{
+                    "Name": "marcdellavolpe.com.",
+                    "Type": "A",
+                    "AliasTarget": {
+                        "HostedZoneId": "Z3AQBSTGFYJSTF",
+                        "DNSName": "s3-website-us-east-1.amazonaws.com"
+                    }},
+                    {
+                        "Name": "marcdellavolpe.com.",
+                        "Type": "MX",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "10 snake.quuux.org.",
+                        ]
+                    }
+                ]
+            },
+        },
+    }
+}
+
+# Shell config
+
+USER = 'marc'
+
+SHELL_HOSTNAME = 'snake.quuux.org'
+
+SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Shell",
 
     "Outputs": {
         "AZ": {
             "Description": "Availability Zone of the newly created EC2 instance",
-            "Value": {"Fn::GetAtt": ["AppServerInstance", "AvailabilityZone"]}
+            "Value": {"Fn::GetAtt": ["Shell", "AvailabilityZone"]}
         },
         "InstanceId": {
             "Description": "InstanceId of the newly created EC2 instance",
-            "Value": {"Ref": "AppServerInstance"}
+            "Value": {"Ref": "Shell"}
         },
         "PublicDNS": {
             "Description": "Public DNSName of the newly created EC2 instance",
-            "Value": {"Fn::GetAtt": ["AppServerInstance", "PublicDnsName"]}
+            "Value": {"Fn::GetAtt": ["Shell", "PublicDnsName"]}
         },
         "PublicIP": {
             "Description": "Public IP address of the newly created EC2 instance",
-            "Value": {"Fn::GetAtt": ["AppServerInstance", "PublicIp"]}
+            "Value": {"Fn::GetAtt": ["Shell", "PublicIp"]}
         }
     },
     "Resources": {
-        "Zone": {
-            "Type": "AWS::Route53::HostedZone",
-            "Properties": {
-                "Name": "snake.quuux.org"
-            }
-        },
 
-        "AppServerInstance": {
+        "Shell": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": "ami-12793a7a",
@@ -42,19 +118,34 @@ SHELL_STACK  = {
                         "GroupSet": [{"Ref": "InstanceSecurityGroup"}],
                         "SubnetId": {"Ref": "Subnet"}
                     }
+                ],
+                "Tags": [
+                    {"Key": "Name", "Value": "Shell"},
                 ]
             },
         },
 
         "Hosts": {
-            "Type": "AWS::Route53::RecordSet",
+            "Type": "AWS::Route53::RecordSetGroup",
             "Properties": {
-                "HostedZoneName": "snake.quuux.org.",
-                "Name": "snake.quuux.org",
-                "Type": "A",
-                "TTL": "300",
-                "ResourceRecords": [{"Fn::GetAtt": ["AppServerInstance", "PublicIp"]}]
-            }
+                "HostedZoneName": "quuux.org.",
+                "RecordSets": [
+                    {
+                        "Name": "snake.quuux.org.",
+                        "Type": "A",
+                        "TTL": "60",
+                        "ResourceRecords": [{"Ref": "IPAddress"}]
+                    },
+                    {
+                        "Name": "quuux.org.",
+                        "Type": "MX",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "10 snake.quuux.org.",
+                        ]
+                    }
+                ]
+            },
         },
 
         "AttachGateway": {
@@ -69,7 +160,7 @@ SHELL_STACK  = {
             "DependsOn": "AttachGateway",
             "Properties": {
                 "Domain": "vpc",
-                "InstanceId": {"Ref": "AppServerInstance"}
+                "InstanceId": {"Ref": "Shell"}
             },
         },
         "InboundSSHNetworkAclEntry": {
@@ -87,6 +178,21 @@ SHELL_STACK  = {
                 "RuleNumber": "101"
             }
         },
+        "InboundSMTPNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "25",
+                    "To": "25"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "102"
+            }
+        },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -97,6 +203,12 @@ SHELL_STACK  = {
                         "FromPort": "22",
                         "IpProtocol": "tcp",
                         "ToPort": "22"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "25",
+                        "IpProtocol": "tcp",
+                        "ToPort": "25"
                     }
                 ],
                 "VpcId": {"Ref": "VPC"}
@@ -149,3 +261,24 @@ SHELL_STACK  = {
         }
     }
 }
+
+BASE_PACKAGES = [
+    "curl",
+    "python-software-properties",
+    "emacs23-nox",
+    "build-essential",
+    "python-pip",
+    "python-setuptools",
+    "python-dev",
+    "tmux",
+    "git",
+    "irssi",
+    "irssi-scripts",
+]
+
+MAIL_FORWARDS = [
+    "quuux.org",
+    "marcdellavolpe.com"
+]
+
+FORWARD_TO = "marc.dellavolpe+{domain}@gmail.com"

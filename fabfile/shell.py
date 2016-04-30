@@ -10,6 +10,7 @@ from fabric.operations import sudo
 from config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, QUUUX_STACK, MAIL_FORWARDS, FORWARD_TO
 from aws import deploy_stack, get_stack_outputs, wait_for_stack
 
+from .common import apt_install, change_hostname
 
 @task
 def inspect(name):
@@ -42,10 +43,6 @@ def sysctl(setting):
         append("/etc/sysctl.conf", setting, use_sudo=True)
 
 
-def apt_install(packages):
-    sudo("DEBIAN_FRONTEND=noninteractive apt-get install -y " + " ".join(packages))
-
-
 @task
 def update_system():
     sudo("DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y upgrade")
@@ -64,9 +61,7 @@ def install_apt():
 
 @task
 def set_hostname():
-    sudo("hostname {}".format(SHELL_HOSTNAME))
-    sudo("echo {} > /etc/hostname".format(SHELL_HOSTNAME))
-
+    change_hostname(SHELL_HOSTNAME)
 
 @task
 def add_user():

@@ -23,7 +23,7 @@ PACKAGES = [
     "bc",
     "libncurses5-dev",
     "cmake",
-    "ibusb-1.0-0.dev",
+    "libusb-1.0-0.dev",
 ]
 
 MOUNTS = [

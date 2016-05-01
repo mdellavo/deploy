@@ -1,6 +1,10 @@
 from fabric.operations import sudo
 
 
+def set_timezone(zoneinfo):
+    sudo('cp /usr/share/zoneinfo/{} /etc/localtime'.format(zoneinfo))
+
+
 def change_hostname(hosetname):
     sudo("hostname {}".format(hosetname))
     sudo("echo {} > /etc/hostname".format(hosetname))

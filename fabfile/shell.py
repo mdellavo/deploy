@@ -10,7 +10,7 @@ from fabric.operations import sudo
 from config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, QUUUX_STACK, MAIL_FORWARDS, FORWARD_TO
 from aws import deploy_stack, get_stack_outputs, wait_for_stack
 
-from .common import apt_install, change_hostname
+from .common import apt_install, change_hostname, set_timezone
 
 @task
 def inspect(name):
@@ -49,7 +49,7 @@ def update_system():
 
 
 def install_ntp():
-    sudo('cp /usr/share/zoneinfo/UTC /etc/localtime')
+    set_timezone("UTC")
     sysctl("xen.independent_wallclock=1")
     apt_install(["ntp"])
 

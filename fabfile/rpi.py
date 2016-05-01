@@ -78,9 +78,8 @@ def install_packages():
 def install_kodi():
     files.sed("/etc/default/kodi", "ENABLED=0", "ENABLED=1")
 
-
 @task
-def install_rtl8812au():
+def install_kernel_source():
     sudo("rpi-update")
 
     run("wget https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O /tmp/rpi-source")
@@ -89,8 +88,13 @@ def install_rtl8812au():
     run("/usr/bin/rpi-source -q --tag-update")
     run("rpi-source")
 
+
+@task
+def install_rtl8812au():
     run("rm -rf rtl8812au && git clone https://github.com/gnab/rtl8812au.git")
     with cd("rtl8812au"):
+        files.sed("Makefile", "CONFIG_PLATFORM_I386_PC = y", "CONFIG_PLATFORM_I386_PC = n")
+        files.sed("Makefile", "CONFIG_PLATFORM_ARM_RPI = n", "CONFIG_PLATFORM_ARM_RPI = y")
         run("make")
         sudo("make install")
 
@@ -111,6 +115,7 @@ def install_rtlsdr():
 def bootstrap(hostname):
     configure_host(hostname)
     install_packages()
+    install_kernel_source()
     install_rtl8812au()
     install_kodi()
     install_rtlsdr()

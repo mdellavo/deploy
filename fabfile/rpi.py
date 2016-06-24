@@ -3,15 +3,19 @@ Tasks to setup a raspberry pi running kodi
 
 Notes https://gist.github.com/mdellavo/5fcff3d50149a58857adbd69af560a99
 """
+import getpass
+from StringIO import StringIO
 
 from fabric.api import task
-from fabric.operations import sudo, run
+from fabric.operations import sudo, run, put
 from fabric.context_managers import cd
 from fabric.contrib import files
 
 from .common import apt_install, change_hostname, set_timezone
 
 TZ = "America/New_York"
+
+SSID = "tube"
 
 PACKAGES = [
     "build-essential",
@@ -41,6 +45,31 @@ CONFIG = [
     "overscan_scale=1",
 ]
 
+RTLSDR_BLACKLIST = """
+blacklist dvb_usb_rtl28xxu
+blacklist rtl2832
+blacklist rtl2830
+"""
+
+WLAN_IFACE = """
+auto wlan0
+allow-hotplug wlan0
+iface wlan0 inet dhcp
+    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
+"""
+
+WIFI_CONFIG = """
+country=US
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+network={
+  ssid="{ssid}"
+  psk={password}
+  key_mgmt=WPA-PSK
+  scan_ssid=1
+}
+"""
 
 @task
 def configure_host(hostname):
@@ -59,7 +88,12 @@ def configure_kernel():
 
 @task
 def configure_network():
-    pass
+    password = getpass.getpass("Password for network: ")
+    files.append("/etc/network/interfaces", WLAN_IFACE, use_sudo=True)
+
+    config = WIFI_CONFIG.format(ssid=SSID, password=password)
+    f = StringIO(config)
+    put(f, "/etc/wpa_supplicant/wpa_supplicant.conf", use_sudo=True)
 
 
 @task
@@ -109,6 +143,9 @@ def install_rtlsdr():
             run("make")
             sudo("make install")
             sudo("ldconfig")
+
+    f = StringIO(RTLSDR_BLACKLIST)
+    put(f, "/etc/modprobe.d/rtlsdr.conf", use_sudo=True)
 
 
 @task

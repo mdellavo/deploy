@@ -12,6 +12,14 @@ from aws import deploy_stack, get_stack_outputs, wait_for_stack
 
 from .common import apt_install, change_hostname, set_timezone
 
+# FIXME
+# encrypted home on ebs
+# postfix ssl?
+# ssl everywhere
+# google authenticator
+
+TZ = "America/New_York"
+
 @task
 def inspect(name):
     conn = boto.connect_cloudformation()
@@ -30,11 +38,11 @@ def deploy_quuux():
 
 
 @task
-def deploy_shell():
+def deploy_shell(name="shell"):
     conn = boto.connect_cloudformation()
-    deploy_stack(conn, 'shell', SHELL_STACK)
-    wait_for_stack(conn, 'shell')
-    rv = get_stack_outputs(conn, 'shell')
+    deploy_stack(conn, name, SHELL_STACK)
+    wait_for_stack(conn, name)
+    rv = get_stack_outputs(conn, name)
     pprint.pprint(rv)
 
 
@@ -49,7 +57,7 @@ def update_system():
 
 
 def install_ntp():
-    set_timezone("UTC")
+    set_timezone(TZ)
     sysctl("xen.independent_wallclock=1")
     apt_install(["ntp"])
 
@@ -90,6 +98,9 @@ def setup_env():
 @task
 def install_postfix():
     apt_install(["postfix"])
+
+    append("/etc/aliases", "root:\t{}".format(FORWARD_TO.format(domain="root")), use_sudo=True)
+    sudo("newaliases")
 
     virtual_alias_domains = "virtual_alias_domains = " + " ".join(MAIL_FORWARDS)
     append("/etc/postfix/main.cf", virtual_alias_domains, use_sudo=True)

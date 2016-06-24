@@ -77,8 +77,9 @@ WEBSITE_STACK = {
 # Shell config
 
 USER = 'marc'
-
 SHELL_HOSTNAME = 'snake.quuux.org'
+SHELL_SIZE = "t2.nano"
+SHELL_AMI = "ami-f652979b"
 
 SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -107,8 +108,8 @@ SHELL_STACK = {
         "Shell": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": "ami-12793a7a",
-                "InstanceType": "t2.micro",
+                "ImageId": SHELL_AMI,
+                "InstanceType": SHELL_SIZE,
                 "KeyName": "marc",
                 "NetworkInterfaces": [
                     {
@@ -265,7 +266,7 @@ SHELL_STACK = {
 BASE_PACKAGES = [
     "curl",
     "python-software-properties",
-    "emacs23-nox",
+    "emacs-nox",
     "build-essential",
     "python-pip",
     "python-setuptools",

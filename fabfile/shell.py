@@ -5,20 +5,17 @@ from getpass import getpass
 
 import boto
 from fabric.api import env, task
-from fabric.contrib.files import append, exists, uncomment
-from fabric.operations import sudo
-from config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, QUUUX_STACK, MAIL_FORWARDS, FORWARD_TO
+from fabric.contrib.files import append, exists, uncomment, sed
+from fabric.operations import sudo, run
+from config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, QUUUX_STACK, MAIL_FORWARDS, FORWARD_TO, TZ, HOMES_DEVICE
 from aws import deploy_stack, get_stack_outputs, wait_for_stack
 
 from .common import apt_install, change_hostname, set_timezone
 
-# FIXME
-# encrypted home on ebs
+# TODO
+# google authenticator
 # postfix ssl?
 # ssl everywhere
-# google authenticator
-
-TZ = "America/New_York"
 
 @task
 def inspect(name):
@@ -56,6 +53,7 @@ def update_system():
     sudo("DEBIAN_FRONTEND=noninteractive apt-get update && apt-get -y upgrade")
 
 
+@task
 def install_ntp():
     set_timezone(TZ)
     sysctl("xen.independent_wallclock=1")
@@ -71,6 +69,7 @@ def install_apt():
 def set_hostname():
     change_hostname(SHELL_HOSTNAME)
 
+
 @task
 def add_user():
     password = getpass('Password for {}: '.format(USER))
@@ -80,7 +79,6 @@ def add_user():
 
 @task
 def copy_ssh_id():
-
     if not exists("/home/{}/.ssh".format(USER)):
         sudo("mkdir /home/{}/.ssh".format(USER), user=USER)
         sudo("touch /home/{}/.ssh/authorized_keys".format(USER), user=USER)
@@ -117,13 +115,26 @@ def install_postfix():
 
 
 @task
+def mount_home():
+
+    if "ext4" not in sudo("file -s " + HOMES_DEVICE):
+        sudo("mkfs -t ext4 " + HOMES_DEVICE)
+        sudo("mount {} -t ext4 /media".format(HOMES_DEVICE))
+        sudo("rsync -aXS /home/. /media/")
+        sudo("umount /media")
+
+    append("/etc/fstab", "{}       /home   ext4    defaults,nofail        0       2".format(HOMES_DEVICE), use_sudo=True)
+    sudo("mount -a")
+
+
+@task
 def deploy():
     set_hostname()
     update_system()
     install_ntp()
     install_postfix()
-
     install_apt()
+    mount_home()
     add_user()
     setup_env()
     copy_ssh_id()

@@ -76,10 +76,14 @@ WEBSITE_STACK = {
 
 # Shell config
 
+TZ = "America/New_York"
 USER = 'marc'
 SHELL_HOSTNAME = 'snake.quuux.org'
 SHELL_SIZE = "t2.nano"
 SHELL_AMI = "ami-f652979b"
+HOMES_SIZE = "25"  # GB
+HOMES_DEVICE_EXT = "h"
+HOMES_DEVICE = "/dev/xvd" + HOMES_DEVICE_EXT
 
 SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -124,6 +128,24 @@ SHELL_STACK = {
                     {"Key": "Name", "Value": "Shell"},
                 ]
             },
+        },
+
+        "HomeVolume" : {
+            "Type" : "AWS::EC2::Volume",
+            "Properties" : {
+                "Size" : HOMES_SIZE,
+                "Encrypted": "true",
+                "AvailabilityZone": { "Fn::GetAtt" : [ "Shell", "AvailabilityZone" ] },
+            }
+        },
+
+        "HomeMountPoint" : {
+            "Type" : "AWS::EC2::VolumeAttachment",
+            "Properties" : {
+                "InstanceId" : { "Ref" : "Shell" },
+                "VolumeId"  : { "Ref" : "HomeVolume" },
+                "Device" : "/dev/sd" + HOMES_DEVICE_EXT
+            }
         },
 
         "Hosts": {
@@ -172,7 +194,7 @@ SHELL_STACK = {
                 "NetworkAclId": {"Ref": "NetworkAcl"},
                 "PortRange": {
                     "From": "22",
-                    "To": "22"
+                    "To": "22",
                 },
                 "Protocol": "6",
                 "RuleAction": "allow",
@@ -202,8 +224,8 @@ SHELL_STACK = {
                     {
                         "CidrIp": "0.0.0.0/0",
                         "FromPort": "22",
+                        "ToPort": "22",
                         "IpProtocol": "tcp",
-                        "ToPort": "22"
                     },
                     {
                         "CidrIp": "0.0.0.0/0",

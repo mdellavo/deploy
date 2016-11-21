@@ -1,4 +1,5 @@
 from fabric.operations import sudo
+from fabric.contrib.files import exists
 
 
 def set_timezone(zoneinfo):
@@ -12,4 +13,12 @@ def change_hostname(hosetname):
 
 def apt_install(packages):
     sudo("DEBIAN_FRONTEND=noninteractive apt-get install -y " + " ".join(packages))
+
+
+def add_repository(url, name):
+    sudo('echo "{url}" | sudo tee /etc/apt/sources.list.d/{name}.list'.format(name=name, url=url))
+
+
+def apt_update():
+    sudo("DEBIAN_FRONTEND=noninteractive apt-get update")
 

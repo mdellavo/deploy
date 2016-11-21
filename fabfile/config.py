@@ -1,27 +1,10 @@
 import os.path
 
-# Zones
-
-QUUUX_STACK = {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Zone configurations",
-
-    "Resources": {
-        "Zone": {
-            "Type": "AWS::Route53::HostedZone",
-            "Properties": {
-                "Name": "quuux.org"
-            }
-        },
-    },
-}
-
-
 # Website config
 
 STATIC_WEBSITES = [
     # (path, bucket)
-    (os.path.expanduser("~/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
+    (os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
 ]
 
 WEBSITE_STACK = {
@@ -77,23 +60,27 @@ WEBSITE_STACK = {
 # Shell config
 
 TZ = "America/New_York"
-USER = 'marc'
-SHELL_HOSTNAME = 'snake.quuux.org'
-SHELL_SIZE = "t2.nano"
-SHELL_AMI = "ami-f652979b"
+AZ = "us-east-1b"
+USER = "marc"
+SHELL_HOSTNAME = "snake.quuux.org"
+SHELL_SIZE = "t2.small"
+SHELL_AMI = "ami-45b69e52"
+
 HOMES_SIZE = "25"  # GB
 HOMES_DEVICE_EXT = "h"
 HOMES_DEVICE = "/dev/xvd" + HOMES_DEVICE_EXT
+
+DB_SIZE = "5"  # GB
+DB_DEVICE_EXT = "i"
+DB_DEVICE = "/dev/xvd" + DB_DEVICE_EXT
+
+DB_PATH = "/db"
 
 SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Shell",
 
     "Outputs": {
-        "AZ": {
-            "Description": "Availability Zone of the newly created EC2 instance",
-            "Value": {"Fn::GetAtt": ["Shell", "AvailabilityZone"]}
-        },
         "InstanceId": {
             "Description": "InstanceId of the newly created EC2 instance",
             "Value": {"Ref": "Shell"}
@@ -102,6 +89,7 @@ SHELL_STACK = {
             "Description": "Public DNSName of the newly created EC2 instance",
             "Value": {"Fn::GetAtt": ["Shell", "PublicDnsName"]}
         },
+
         "PublicIP": {
             "Description": "Public IP address of the newly created EC2 instance",
             "Value": {"Fn::GetAtt": ["Shell", "PublicIp"]}
@@ -124,27 +112,44 @@ SHELL_STACK = {
                         "SubnetId": {"Ref": "Subnet"}
                     }
                 ],
+                "Volumes": [
+                    {
+                        "VolumeId": {"Ref": "HomeVolume"},
+                        "Device": "/dev/sd" + HOMES_DEVICE_EXT
+                    },
+                    {
+                        "VolumeId": {"Ref": "DBVolume"},
+                        "Device": "/dev/sd" + DB_DEVICE_EXT
+                    },
+                ],
                 "Tags": [
                     {"Key": "Name", "Value": "Shell"},
                 ]
             },
         },
 
-        "HomeVolume" : {
-            "Type" : "AWS::EC2::Volume",
-            "Properties" : {
-                "Size" : HOMES_SIZE,
+        "HomeVolume": {
+            "Type": "AWS::EC2::Volume",
+            "Properties": {
+                "Size": HOMES_SIZE,
                 "Encrypted": "true",
-                "AvailabilityZone": { "Fn::GetAtt" : [ "Shell", "AvailabilityZone" ] },
+                "AvailabilityZone": AZ,
             }
         },
 
-        "HomeMountPoint" : {
-            "Type" : "AWS::EC2::VolumeAttachment",
-            "Properties" : {
-                "InstanceId" : { "Ref" : "Shell" },
-                "VolumeId"  : { "Ref" : "HomeVolume" },
-                "Device" : "/dev/sd" + HOMES_DEVICE_EXT
+        "DBVolume": {
+            "Type": "AWS::EC2::Volume",
+            "Properties": {
+                "Size": DB_SIZE,
+                "Encrypted": "true",
+                "AvailabilityZone": AZ,
+            }
+        },
+
+        "Zone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": "quuux.org"
             }
         },
 
@@ -166,7 +171,15 @@ SHELL_STACK = {
                         "ResourceRecords": [
                             "10 snake.quuux.org.",
                         ]
-                    }
+                    },
+
+                    {
+                        "Name": "knapsack.quuux.org.",
+                        "Type": "A",
+                        "TTL": "60",
+                        "ResourceRecords": [{"Ref": "IPAddress"}]
+                    },
+
                 ]
             },
         },
@@ -216,6 +229,36 @@ SHELL_STACK = {
                 "RuleNumber": "102"
             }
         },
+        "InboundHTTPNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "80",
+                    "To": "80"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "103"
+            }
+        },
+        "InboundHTTPSNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "443",
+                    "To": "443"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "104"
+            }
+        },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -232,7 +275,19 @@ SHELL_STACK = {
                         "FromPort": "25",
                         "IpProtocol": "tcp",
                         "ToPort": "25"
-                    }
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "80",
+                        "IpProtocol": "tcp",
+                        "ToPort": "80"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "443",
+                        "IpProtocol": "tcp",
+                        "ToPort": "443"
+                    },
                 ],
                 "VpcId": {"Ref": "VPC"}
             },
@@ -285,9 +340,12 @@ SHELL_STACK = {
     }
 }
 
+
 BASE_PACKAGES = [
-    "curl",
     "python-software-properties",
+    "apt-transport-https",
+    "ca-certificates",
+    "curl",
     "emacs-nox",
     "build-essential",
     "python-pip",
@@ -297,6 +355,8 @@ BASE_PACKAGES = [
     "git",
     "irssi",
     "irssi-scripts",
+    "aspell",
+    "jq",
 ]
 
 MAIL_FORWARDS = [

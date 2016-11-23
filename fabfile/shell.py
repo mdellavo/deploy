@@ -189,7 +189,7 @@ def deploy_container(container_id):
 
 
 def container_address(container_id):
-    return sudo("docker inspect knapsack|jq -r .[].NetworkSettings.IPAddress")
+    return sudo("docker inspect {}|jq -r .[].NetworkSettings.IPAddress".format(container_id))
 
 
 def add_container_host(container_id):
@@ -204,7 +204,7 @@ def deploy_knapsack():
         sudo("createuser knapsack", user="postgres")
         sudo("psql knapsack -c 'GRANT ALL PRIVILEGES ON DATABASE knapsack TO knapsack'", user="postgres")
 
-    #deploy_container("knapsack")
+    deploy_container("knapsack")
 
     service_src = os.path.join(CONFIGS_PATH, "knapsack.service")
     put(service_src, "/etc/systemd/system/knapsack.service", use_sudo=True)
@@ -224,6 +224,11 @@ def deploy_knapsack():
     sudo("ln -sf /etc/nginx/sites-available/knapsack /etc/nginx/sites-enabled/knapsack")
 
     sudo("/etc/init.d/nginx reload")
+
+
+@task
+def deploy_ircd():
+    pass
 
 
 @task

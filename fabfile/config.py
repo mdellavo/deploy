@@ -158,6 +158,8 @@ SHELL_STACK = {
             "Properties": {
                 "HostedZoneName": "quuux.org.",
                 "RecordSets": [
+
+                    # Base
                     {
                         "Name": "snake.quuux.org.",
                         "Type": "A",
@@ -173,11 +175,44 @@ SHELL_STACK = {
                         ]
                     },
 
+                    # Knapsack
                     {
                         "Name": "knapsack.quuux.org.",
                         "Type": "A",
                         "TTL": "60",
                         "ResourceRecords": [{"Ref": "IPAddress"}]
+                    },
+
+                    # Rubiks
+                    {
+                        "Name": "rubiks.quuux.org.",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "SetIdentifier": "literat.us",
+                        "Weight": 1,
+                        "ResourceRecords": ["literat.us"],
+                    },
+                    {
+                        "Name": "rubiks.quuux.org.",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "SetIdentifier": "pulsar-zone.net",
+                        "Weight": 1,
+                        "ResourceRecords": ["irc.pulsar-zone.net"],
+                    },
+                    {
+                        "Name": "rubiks.quuux.org.",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "SetIdentifier": "dgb3.net",
+                        "Weight": 1,
+                        "ResourceRecords": ["katy.dgb3.net"],
+                    },
+                    {
+                        "Name": "irc.quuux.org.",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "ResourceRecords": ["rubiks.quuux.org"],
                     },
 
                 ]
@@ -356,6 +391,7 @@ BASE_PACKAGES = [
     "irssi",
     "irssi-scripts",
     "aspell",
+    "libtext-aspell-perl",
     "jq",
 ]
 

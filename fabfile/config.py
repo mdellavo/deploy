@@ -50,7 +50,16 @@ WEBSITE_STACK = {
                         "ResourceRecords": [
                             "10 snake.quuux.org.",
                         ]
-                    }
+                    },
+                    {
+                        "Name": "marcdellavolpe.com",
+                        "Type": "TXT",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "\"google-site-verification=KasvFeWlCVAUYQ2xIU8ZabVi8SVbxwOieWQVEV6uF70\"",
+                            "\"v=spf1 mx -all\"",
+                        ]
+                    },
                 ]
             },
         },
@@ -172,6 +181,15 @@ SHELL_STACK = {
                         "TTL": "60",
                         "ResourceRecords": [
                             "10 snake.quuux.org.",
+                        ]
+                    },
+                    {
+                        "Name": "quuux.org.",
+                        "Type": "TXT",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "\"v=spf1 mx -all\"",
+                            "\"google-site-verification=Jkx3pb3aspcyfy4-GVUtFkWB4ug24Q-bvfFX14qFGHw\"",
                         ]
                     },
 

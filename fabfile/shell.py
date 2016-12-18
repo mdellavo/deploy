@@ -95,14 +95,11 @@ def setup_env():
 def install_postfix():
     apt_install(["postfix"])
 
+    nginx_conf_src = os.path.join(CONFIGS_PATH, "postfix.conf")
+    put(nginx_conf_src, "/etc/postfix/main.cf", use_sudo=True)
+
     append("/etc/aliases", "root:\t{}".format(FORWARD_TO.format(domain="root")), use_sudo=True)
     sudo("newaliases")
-
-    virtual_alias_domains = "virtual_alias_domains = " + " ".join(MAIL_FORWARDS)
-    append("/etc/postfix/main.cf", virtual_alias_domains, use_sudo=True)
-
-    virtual_alias_map = "virtual_alias_maps = hash:/etc/postfix/virtual"
-    append("/etc/postfix/main.cf", virtual_alias_map, use_sudo=True)
 
     for domain in MAIL_FORWARDS:
         forward_to = "@{} {}".format(domain, FORWARD_TO.format(domain=domain))

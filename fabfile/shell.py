@@ -204,6 +204,9 @@ def add_container_host(container_id):
 
 @task
 def deploy_knapsack():
+
+    sudo("/home/marc/certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack.quuux.org")
+
     with settings(warn_only=True):
         sudo("createdb knapsack", user="postgres")
         sudo("createuser knapsack", user="postgres")
@@ -241,7 +244,7 @@ def install_letsencrypt():
     run("wget https://dl.eff.org/certbot-auto")
     run("chmod a+x ./certbot-auto")
 
-    run("./certbot-auto certonly --webroot -m marc.dellavolpe@gmail.com --agree-tos -w /var/www/html/ -d snake.quuux.org")
+    sudo("/home/marc/certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
 
 
 @task

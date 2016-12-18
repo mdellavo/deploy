@@ -162,7 +162,6 @@ def install_postgres():
     if not contains("/etc/postgresql/9.6/main/pg_hba.conf", CONTAINER_SUBNET):
         append("/etc/postgresql/9.6/main/pg_hba.conf", "host\tall\tall\t{}\ttrust".format(CONTAINER_SUBNET), use_sudo=True)
 
-
     if not contains("/etc/postgresql/9.6/main/postgresql.conf", LISTEN_ADDRESSES):
         append("/etc/postgresql/9.6/main/postgresql.conf", LISTEN_ADDRESSES, use_sudo=True)
     sudo("systemctl start postgresql")
@@ -173,8 +172,14 @@ def install_nginx():
     sudo("add-apt-repository ppa:nginx/stable")
     apt_update()
     apt_install(["nginx"])
-    sudo("rm /var/www/html/index.nginx-debian.html")
-    sudo("touch /var/www/html/index.html")
+
+    nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.snake.conf")
+    put(nginx_conf_src, "/etc/nginx/sites-available/default", use_sudo=True)
+
+    # sudo("rm /var/www/html/index.nginx-debian.html")
+    # sudo("touch /var/www/html/index.html")
+
+    sudo("/etc/init.d/nginx restart")
 
 
 def deploy_container(container_id):
@@ -232,6 +237,14 @@ def deploy_ircd():
 
 
 @task
+def install_letsencrypt():
+    run("wget https://dl.eff.org/certbot-auto")
+    run("chmod a+x ./certbot-auto")
+
+    run("./certbot-auto certonly --webroot -m marc.dellavolpe@gmail.com --agree-tos -w /var/www/html/ -d snake.quuux.org")
+
+
+@task
 def deploy():
     initialize_volumes()
     set_hostname()
@@ -242,6 +255,7 @@ def deploy():
 
     install_docker()
     install_postgres()
+    install_letsencrypt()
     install_nginx()
 
     add_user()

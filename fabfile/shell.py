@@ -93,10 +93,24 @@ def setup_env():
 
 @task
 def install_postfix():
-    apt_install(["postfix"])
+    apt_install(["postfix", "opendkim", "opendkim-tools"])
 
-    nginx_conf_src = os.path.join(CONFIGS_PATH, "postfix.conf")
-    put(nginx_conf_src, "/etc/postfix/main.cf", use_sudo=True)
+    sudo("echo quuux.org > /etc/mailname")
+
+    opendkim_conf_src = os.path.join(CONFIGS_PATH, "opendkim.conf")
+    put(opendkim_conf_src, "/etc/opendkim.conf", use_sudo=True)
+
+    run("opendkim-genkey -t -s mail -d quuux.org")
+    sudo("mv mail.private /etc/dkimkeys/mail.key.pem")
+    sudo("chown opendkim /etc/dkimkeys/mail.key.pem")
+    sudo("chmod 0600 /etc/dkimkeys/mail.key.pem")
+    run("cat mail.txt")
+
+    append("/etc/default/opendkim", "SOCKET=\"inet:8891@localhost\"", use_sudo=True)
+    sudo("service opendkim restart")
+
+    postfix_conf_src = os.path.join(CONFIGS_PATH, "postfix.conf")
+    put(postfix_conf_src, "/etc/postfix/main.cf", use_sudo=True)
 
     append("/etc/aliases", "root:\t{}".format(FORWARD_TO.format(domain="root")), use_sudo=True)
     sudo("newaliases")

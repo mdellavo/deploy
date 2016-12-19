@@ -192,6 +192,15 @@ SHELL_STACK = {
                             "\"google-site-verification=Jkx3pb3aspcyfy4-GVUtFkWB4ug24Q-bvfFX14qFGHw\"",
                         ]
                     },
+                    {
+                        "Name": "mail._domainkey.quuux.org.",
+                        "Type": "TXT",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "\"v=DKIM1; k=rsa; t=y; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDF0Y5593vEcohWnswvrcLcsh6Jze6AVfpxsSkAh06d9ulb3NMlwdPPJ/Z0/GfjM5WNrMK9UpbgBo+s/UrfJpt8uTcy607Xe5Fxvwf7ZdV7TB6tIbrGOudhwt3dJa3oEndomscG4yuactzJk8IBIM6le7eHfmJAr42nBnhnY5/OmQIDAQAB\""
+                        ]
+
+                    },
 
                     # Knapsack
                     {
@@ -379,6 +388,7 @@ BASE_PACKAGES = [
     "aspell",
     "libtext-aspell-perl",
     "jq",
+    "mailutils",
 ]
 
 MAIL_FORWARDS = [

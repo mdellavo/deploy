@@ -48,6 +48,12 @@ def update_system():
 
 
 @task
+def setup_unattended_upgrades():
+    apt_install(["unattended-upgrades"])
+    sudo("DEBIAN_FRONTEND=noninteractive dpkg-reconfigure --priority=low unattended-upgrades")
+
+
+@task
 def install_ntp():
     set_timezone(TZ)
     sysctl("xen.independent_wallclock=1")
@@ -212,6 +218,13 @@ def add_container_host(container_id):
     sudo("sed -i /{}/d /etc/hosts".format(container_id))
     append("/etc/hosts", "{}\t{}".format(container_address(container_id), container_id), use_sudo=True)
 
+@task
+def restart_knapsack():
+    sudo("systemctl stop knapsack.service")
+    with settings(warn_only=True):
+        sudo("docker rm knapsack")
+    sudo("systemctl restart knapsack.service")
+
 
 @task
 def deploy_knapsack():
@@ -231,10 +244,7 @@ def deploy_knapsack():
     sudo("systemctl daemon-reload")
     sudo("systemctl enable knapsack.service")
 
-    sudo("systemctl stop knapsack.service")
-    with settings(warn_only=True):
-        sudo("docker rm knapsack")
-    sudo("systemctl start knapsack.service")
+    restart_knapsack()
 
     add_container_host("knapsack")
 
@@ -263,6 +273,7 @@ def deploy():
     initialize_volumes()
     set_hostname()
     update_system()
+    setup_unattended_upgrades()
     install_apt()
     install_ntp()
     install_postfix()

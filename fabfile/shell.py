@@ -168,6 +168,7 @@ CONTAINER_SUBNET = "172.17.0.0/16"
 BRIDGE_IP = "172.17.0.1"
 LISTEN_ADDRESSES = "listen_addresses = '*'"
 
+
 @task
 def install_postgres():
     sudo("wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -")
@@ -218,35 +219,35 @@ def add_container_host(container_id):
     sudo("sed -i /{}/d /etc/hosts".format(container_id))
     append("/etc/hosts", "{}\t{}".format(container_address(container_id), container_id), use_sudo=True)
 
+
 @task
 def restart_knapsack():
-    sudo("systemctl stop knapsack.service")
     with settings(warn_only=True):
+        sudo("/usr/bin/docker stop -t 2 knapsack")
         sudo("docker rm knapsack")
-    sudo("systemctl restart knapsack.service")
+
+    secret = getpass()
+    sudo("/usr/bin/docker run -d --tmpfs=1 --restart always --name knapsack -h knapsack --add-host database:172.17.0.1 -e LOCKBOX_SECRET={} knapsack".format(secret))
 
 
 @task
 def deploy_knapsack():
+    deploy_container("knapsack")
+    restart_knapsack()
+    add_container_host("knapsack")
 
-    sudo("/home/marc/certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack.quuux.org")
+
+@task
+def configure_knapsack():
+
+    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack-api.quuux.org")
 
     with settings(warn_only=True):
         sudo("createdb knapsack", user="postgres")
         sudo("createuser knapsack", user="postgres")
         sudo("psql knapsack -c 'GRANT ALL PRIVILEGES ON DATABASE knapsack TO knapsack'", user="postgres")
 
-    deploy_container("knapsack")
-
-    service_src = os.path.join(CONFIGS_PATH, "knapsack.service")
-    put(service_src, "/etc/systemd/system/knapsack.service", use_sudo=True)
-
-    sudo("systemctl daemon-reload")
-    sudo("systemctl enable knapsack.service")
-
-    restart_knapsack()
-
-    add_container_host("knapsack")
+    deploy_knapsack()
 
     nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.knapsack.conf")
     put(nginx_conf_src, "/etc/nginx/sites-available/knapsack", use_sudo=True)
@@ -262,10 +263,11 @@ def deploy_ircd():
 
 @task
 def install_letsencrypt():
-    run("wget https://dl.eff.org/certbot-auto")
-    run("chmod a+x ./certbot-auto")
+    if not exists("./certbot-auto"):
+        run("wget https://dl.eff.org/certbot-auto")
+        run("chmod a+x ./certbot-auto")
 
-    sudo("/home/marc/certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
+    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
 
 
 @task
@@ -287,4 +289,4 @@ def deploy():
     setup_env()
     copy_ssh_id()
 
-    deploy_knapsack()
+    configure_knapsack()

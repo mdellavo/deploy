@@ -204,7 +204,7 @@ SHELL_STACK = {
 
                     # Knapsack
                     {
-                        "Name": "knapsack.quuux.org.",
+                        "Name": "knapsack-api.quuux.org.",
                         "Type": "A",
                         "TTL": "60",
                         "ResourceRecords": [{"Ref": "IPAddress"}]
@@ -389,6 +389,7 @@ BASE_PACKAGES = [
     "libtext-aspell-perl",
     "jq",
     "mailutils",
+    "letsencrypt",
 ]
 
 MAIL_FORWARDS = [

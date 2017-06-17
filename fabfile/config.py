@@ -1,7 +1,9 @@
 import os.path
 
-# Website config
+CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 
+
+# Website config
 STATIC_WEBSITES = [
     # (path, bucket)
     (os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
@@ -36,13 +38,15 @@ WEBSITE_STACK = {
             "DependsOn": "ZoneMarcDellaVolpe",
             "Properties": {
                 "HostedZoneName": "marcdellavolpe.com.",
-                "RecordSets": [{
-                    "Name": "marcdellavolpe.com.",
-                    "Type": "A",
-                    "AliasTarget": {
-                        "HostedZoneId": "Z3AQBSTGFYJSTF",
-                        "DNSName": "s3-website-us-east-1.amazonaws.com"
-                    }},
+                "RecordSets": [
+		    {
+			"Name": "marcdellavolpe.com.",
+			"Type": "A",
+			"AliasTarget": {
+                            "HostedZoneId": "Z3AQBSTGFYJSTF",
+                            "DNSName": "s3-website-us-east-1.amazonaws.com"
+			}
+		    },
                     {
                         "Name": "marcdellavolpe.com.",
                         "Type": "MX",
@@ -84,6 +88,8 @@ DB_DEVICE_EXT = "i"
 DB_DEVICE = "/dev/xvd" + DB_DEVICE_EXT
 
 DB_PATH = "/db"
+
+KNAPSACK_BUCKET_NAME = "knapsack.quuux.org"
 
 SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -154,7 +160,18 @@ SHELL_STACK = {
                 "AvailabilityZone": AZ,
             }
         },
-
+	
+	"BucketKnapsackWeb": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": KNAPSACK_BUCKET_NAME,
+                "AccessControl": "PublicRead",
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html"
+                }
+            }
+        },
+	
         "Zone": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
@@ -203,6 +220,12 @@ SHELL_STACK = {
                     },
 
                     # Knapsack
+		    {
+			"Name": "knapsack.quuux.org.",
+			"Type": "CNAME",
+			"TTL": "60",
+			"ResourceRecords": ["knapsack.quuux.org.s3-website-us-east-1.amazonaws.com"],
+		    },
                     {
                         "Name": "knapsack-api.quuux.org.",
                         "Type": "A",
@@ -366,7 +389,7 @@ SHELL_STACK = {
                 "EnableDnsHostnames": "true",
                 "EnableDnsSupport": "true"
             },
-        }
+        },
     }
 }
 

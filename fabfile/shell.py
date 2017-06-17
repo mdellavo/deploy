@@ -8,12 +8,15 @@ from fabric.api import env, task, local, put, run
 from fabric.contrib.files import append, exists, uncomment, contains, sed
 from fabric.operations import sudo
 from fabric.context_managers import settings
-from config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, MAIL_FORWARDS, FORWARD_TO, TZ, HOMES_DEVICE, DB_DEVICE, DB_PATH
-from aws import deploy_stack, get_stack_outputs, wait_for_stack
 
+from .config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, MAIL_FORWARDS, FORWARD_TO, TZ, HOMES_DEVICE, DB_DEVICE, DB_PATH, KNAPSACK_BUCKET_NAME, CONFIGS_PATH
+from .aws import deploy_stack, get_stack_outputs, wait_for_stack
 from .common import apt_install, change_hostname, set_timezone, add_repository, apt_update
+from .website import deploy_website
 
-CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
+
+KNAPSACK_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Knapsack")
+KNAPSACK_WEB_PATH = os.path.join(KNAPSACK_PATH, "web", "build")
 
 
 @task
@@ -236,11 +239,14 @@ def deploy_knapsack():
     restart_knapsack()
     add_container_host("knapsack")
 
+@task
+def update_knapsack_cert():
+    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack-api.quuux.org")
+
 
 @task
 def configure_knapsack():
-
-    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack-api.quuux.org")
+    update_knapsack_cert()
 
     with settings(warn_only=True):
         sudo("createdb knapsack", user="postgres")
@@ -255,10 +261,35 @@ def configure_knapsack():
 
     sudo("/etc/init.d/nginx reload")
 
+@task
+def deploy_knapsack_web():
+    deploy_website(KNAPSACK_WEB_PATH, KNAPSACK_BUCKET_NAME)
+
+
+@task
+def deploy_knapsack_monitor():
+    script_path = os.path.join(KNAPSACK_PATH, "scripts", "check-knapsack-api.sh")
+    
+    if not exists("./check-knapsack-api.sh"):
+        put(script_path, ".")
+        run("chmod a+x ./check-knapsack-api.sh")
+
+    run("touch /tmp/crontab")
+    with settings(warn_only=True):
+        run("crontab -l > /tmp/crontab")
+    crontab = "\t".join(("*/10", "*", "*", "*", "*", "./check-knapsack-api.sh"))
+    append("/tmp/crontab", crontab)
+    run("crontab /tmp/crontab")
+
 
 @task
 def deploy_ircd():
     pass
+
+
+@task
+def update_snake_cert():
+    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
 
 
 @task
@@ -267,7 +298,9 @@ def install_letsencrypt():
         run("wget https://dl.eff.org/certbot-auto")
         run("chmod a+x ./certbot-auto")
 
-    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
+@task
+def install_znc():
+    apt_install(["znc"])
 
 
 @task
@@ -279,6 +312,7 @@ def deploy():
     install_apt()
     install_ntp()
     install_postfix()
+    install_znc()
 
     install_docker()
     install_postgres()

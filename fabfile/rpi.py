@@ -3,26 +3,27 @@ Tasks to setup a raspberry pi running kodi
 
 Notes https://gist.github.com/mdellavo/5fcff3d50149a58857adbd69af560a99
 """
+import os
 import getpass
 from StringIO import StringIO
 
-from fabric.api import task
-from fabric.operations import sudo, run, put
+from fabric.api import task, env
+from fabric.operations import sudo, run, put, local
 from fabric.context_managers import cd
 from fabric.contrib import files
 
 from .common import apt_install, change_hostname, set_timezone
+from .config import CONFIGS_PATH
 
 TZ = "America/New_York"
 
-SSID = "tube"
+SSID = "hood"
 
 PACKAGES = [
     "build-essential",
     "rpi-update",
     "git",
     "dkms",
-    "kodi",
     "ntp",
     "bc",
     "libncurses5-dev",
@@ -63,12 +64,12 @@ country=US
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 
-network={
+network={{
   ssid="{ssid}"
-  psk={password}
+  psk="{password}"
   key_mgmt=WPA-PSK
   scan_ssid=1
-}
+}}
 """
 
 @task
@@ -110,7 +111,12 @@ def install_packages():
 
 @task
 def install_kodi():
-    files.sed("/etc/default/kodi", "ENABLED=0", "ENABLED=1")
+    apt_install(["kodi"])
+    sudo("adduser  --disabled-password --disabled-login --gecos \"\" kodi", warn_only=True)
+    sudo("usermod -a -G cdrom,audio,video,plugdev,users,dialout,dip,input kodi")
+    put(os.path.join(CONFIGS_PATH, "kodi.service"), "/etc/systemd/system/multi-user.target.wants/kodi.service", use_sudo=True)
+    sudo("systemctl start kodi")
+
 
 @task
 def install_kernel_source():
@@ -147,14 +153,26 @@ def install_rtlsdr():
     f = StringIO(RTLSDR_BLACKLIST)
     put(f, "/etc/modprobe.d/rtlsdr.conf", use_sudo=True)
 
+@task
+def add_user():
+    sudo("adduser marc", warn_only=True)
+    sudo("usermod -a -G sudo marc")
+    local("ssh-copy-id marc@" + env.host_string)
+
+
+@task
+def change_pi_password():
+    run("passwd")
+
 
 @task
 def bootstrap(hostname):
     configure_host(hostname)
     install_packages()
-    install_kernel_source()
-    install_rtl8812au()
+    add_user()
+    #install_kernel_source()
+    #install_rtl8812au()
     install_kodi()
-    install_rtlsdr()
+    #install_rtlsdr()
 
 

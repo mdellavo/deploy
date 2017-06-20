@@ -17,7 +17,7 @@ from .config import CONFIGS_PATH
 
 TZ = "America/New_York"
 
-SSID = "hood"
+SSID = "tube"
 
 PACKAGES = [
     "build-essential",
@@ -114,8 +114,9 @@ def install_kodi():
     apt_install(["kodi"])
     sudo("adduser  --disabled-password --disabled-login --gecos \"\" kodi", warn_only=True)
     sudo("usermod -a -G cdrom,audio,video,plugdev,users,dialout,dip,input kodi")
-    put(os.path.join(CONFIGS_PATH, "kodi.service"), "/etc/systemd/system/multi-user.target.wants/kodi.service", use_sudo=True)
+    put(os.path.join(CONFIGS_PATH, "kodi.service"), "/etc/systemd/system/kodi.service", use_sudo=True)
     sudo("systemctl start kodi")
+    sudo("systemctl enable kodi")
 
 
 @task
@@ -170,8 +171,8 @@ def bootstrap(hostname):
     configure_host(hostname)
     install_packages()
     add_user()
-    #install_kernel_source()
-    #install_rtl8812au()
+    install_kernel_source()
+    install_rtl8812au()
     install_kodi()
     #install_rtlsdr()
 

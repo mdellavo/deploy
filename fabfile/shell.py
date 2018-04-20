@@ -9,10 +9,42 @@ from fabric.contrib.files import append, exists, uncomment, contains, sed
 from fabric.operations import sudo
 from fabric.context_managers import settings
 
-from .config import SHELL_STACK, BASE_PACKAGES, USER, SHELL_HOSTNAME, MAIL_FORWARDS, FORWARD_TO, TZ, HOMES_DEVICE, DB_DEVICE, DB_PATH, KNAPSACK_BUCKET_NAME, CONFIGS_PATH
+from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, KNAPSACK_BUCKET_NAME, CONFIGS_PATH
 from .aws import deploy_stack, get_stack_outputs, wait_for_stack
 from .common import apt_install, change_hostname, set_timezone, add_repository, apt_update
 from .website import deploy_website
+
+
+TZ = "America/New_York"
+USER = "marc"
+SHELL_HOSTNAME = "snake.quuux.org"
+
+BASE_PACKAGES = [
+    "python-software-properties",
+    "apt-transport-https",
+    "ca-certificates",
+    "curl",
+    "emacs-nox",
+    "build-essential",
+    "python-pip",
+    "python-setuptools",
+    "python-dev",
+    "tmux",
+    "git",
+    "irssi",
+    "irssi-scripts",
+    "aspell",
+    "libtext-aspell-perl",
+    "jq",
+    "mailutils",
+]
+
+MAIL_FORWARDS = [
+    "quuux.org",
+    "marcdellavolpe.com"
+]
+
+FORWARD_TO = "marc.dellavolpe+{domain}@gmail.com"
 
 
 KNAPSACK_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Knapsack")
@@ -98,6 +130,27 @@ def copy_ssh_id():
 @task
 def setup_env():
     uncomment("/home/{}/.bashrc".format(USER), '#force_color_prompt=yes', use_sudo=True)
+
+
+CERTS = [
+    "knapsack-api.quuux.org",
+    "snake.quuux.org",
+]
+
+
+@task
+def install_certbot():
+    sudo("add-apt-repository ppa:certbot/certbot")
+    apt_update()
+    apt_install(["python-certbot-nginx"])
+
+    for cert in CERTS:
+        sudo("certbot certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d {}".format(cert))
+
+
+@task
+def update_certs():
+    sudo("certbot renew --nginx -m marc.dellavolpe@gmail.com --agree-tos")
 
 
 @task
@@ -230,7 +283,7 @@ def restart_knapsack():
         sudo("docker rm knapsack")
 
     secret = getpass()
-    sudo("/usr/bin/docker run -d --tmpfs=1 --restart always --name knapsack -h knapsack --add-host database:172.17.0.1 -e LOCKBOX_SECRET={} knapsack".format(secret))
+    sudo("/usr/bin/docker run -d --restart always --name knapsack -h knapsack --add-host database:172.17.0.1 -e LOCKBOX_SECRET={} knapsack".format(secret))
 
 
 @task
@@ -238,11 +291,6 @@ def deploy_knapsack():
     deploy_container("knapsack")
     restart_knapsack()
     add_container_host("knapsack")
-
-@task
-def update_knapsack_cert():
-    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d knapsack-api.quuux.org")
-
 
 @task
 def configure_knapsack():
@@ -286,17 +334,6 @@ def deploy_knapsack_monitor():
 def deploy_ircd():
     pass
 
-
-@task
-def update_snake_cert():
-    sudo("./certbot-auto certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d snake.quuux.org")
-
-
-@task
-def install_letsencrypt():
-    if not exists("./certbot-auto"):
-        run("wget https://dl.eff.org/certbot-auto")
-        run("chmod a+x ./certbot-auto")
 
 @task
 def install_znc():

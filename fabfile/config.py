@@ -2,11 +2,11 @@ import os.path
 
 CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 
-
 # Website config
 STATIC_WEBSITES = [
     # (path, bucket)
     (os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
+    (os.path.expanduser("~/Dropbox/Projects/GDAX/web"), ""),
 ]
 
 WEBSITE_STACK = {
@@ -39,14 +39,14 @@ WEBSITE_STACK = {
             "Properties": {
                 "HostedZoneName": "marcdellavolpe.com.",
                 "RecordSets": [
-		    {
-			"Name": "marcdellavolpe.com.",
-			"Type": "A",
-			"AliasTarget": {
+                    {
+                        "Name": "marcdellavolpe.com.",
+                        "Type": "A",
+                        "AliasTarget": {
                             "HostedZoneId": "Z3AQBSTGFYJSTF",
                             "DNSName": "s3-website-us-east-1.amazonaws.com"
-			}
-		    },
+                        }
+                    },
                     {
                         "Name": "marcdellavolpe.com.",
                         "Type": "MX",
@@ -72,10 +72,7 @@ WEBSITE_STACK = {
 
 # Shell config
 
-TZ = "America/New_York"
 AZ = "us-east-1b"
-USER = "marc"
-SHELL_HOSTNAME = "snake.quuux.org"
 SHELL_SIZE = "t2.small"
 SHELL_AMI = "ami-45b69e52"
 
@@ -90,6 +87,8 @@ DB_DEVICE = "/dev/xvd" + DB_DEVICE_EXT
 DB_PATH = "/db"
 
 KNAPSACK_BUCKET_NAME = "knapsack.quuux.org"
+GDAX_TRADER_BUCKET_NAME = "gdax-trader.quuux.org"
+
 
 SHELL_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -160,8 +159,8 @@ SHELL_STACK = {
                 "AvailabilityZone": AZ,
             }
         },
-	
-	"BucketKnapsackWeb": {
+
+        "BucketKnapsackWeb": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": KNAPSACK_BUCKET_NAME,
@@ -171,7 +170,15 @@ SHELL_STACK = {
                 }
             }
         },
-	
+
+        "BucketGDAXTraderWeb": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": GDAX_TRADER_BUCKET_NAME,
+                "AccessControl": "PublicRead",
+            }
+        },
+
         "Zone": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
@@ -220,12 +227,12 @@ SHELL_STACK = {
                     },
 
                     # Knapsack
-		    {
-			"Name": "knapsack.quuux.org.",
-			"Type": "CNAME",
-			"TTL": "60",
-			"ResourceRecords": ["knapsack.quuux.org.s3-website-us-east-1.amazonaws.com"],
-		    },
+                    {
+                        "Name": "knapsack.quuux.org.",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "ResourceRecords": ["knapsack.quuux.org.s3-website-us-east-1.amazonaws.com"],
+                    },
                     {
                         "Name": "knapsack-api.quuux.org.",
                         "Type": "A",
@@ -393,31 +400,3 @@ SHELL_STACK = {
     }
 }
 
-
-BASE_PACKAGES = [
-    "python-software-properties",
-    "apt-transport-https",
-    "ca-certificates",
-    "curl",
-    "emacs-nox",
-    "build-essential",
-    "python-pip",
-    "python-setuptools",
-    "python-dev",
-    "tmux",
-    "git",
-    "irssi",
-    "irssi-scripts",
-    "aspell",
-    "libtext-aspell-perl",
-    "jq",
-    "mailutils",
-    "letsencrypt",
-]
-
-MAIL_FORWARDS = [
-    "quuux.org",
-    "marcdellavolpe.com"
-]
-
-FORWARD_TO = "marc.dellavolpe+{domain}@gmail.com"

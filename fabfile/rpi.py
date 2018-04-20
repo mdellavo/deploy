@@ -72,6 +72,15 @@ network={{
 }}
 """
 
+GAMEPAD_MACS = [
+    "69:01:27:27:66:04",
+    "69:01:DE:5C:66:04",
+]
+
+GAMEPAD_UDEV_PATH = "/etc/udev/rules.d/10-gamepad.rules"
+GAMEPAD_UDEV_RULE = 'SUBSYSTEM=="input", ATTRS{name}=="8Bitdo NES30 Pro", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"'
+
+
 @task
 def configure_host(hostname):
     change_hostname(hostname)
@@ -106,6 +115,8 @@ def add_mounts():
 
 @task
 def install_packages():
+    sudo("apt-get update")
+    sudo("apt-get dist-upgrade -y")
     apt_install(PACKAGES)
 
 
@@ -120,18 +131,32 @@ def install_kodi():
 
 
 @task
-def install_kernel_source():
-    sudo("rpi-update")
+def setup_gamepads():
+    files.append("/etc/bluetooth/main.conf", "AutoEnable=true", use_sudo=True)  # FIXME hacked
+    put(StringIO(GAMEPAD_UDEV_RULE), GAMEPAD_UDEV_PATH, use_sudo=True)
 
-    run("wget https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O /tmp/rpi-source")
-    sudo("mv /tmp/rpi-source /usr/bin/rpi-source")
-    sudo("chmod +x /usr/bin/rpi-source")
-    run("/usr/bin/rpi-source -q --tag-update")
-    run("rpi-source")
+
+@task
+def connect_gamepads():
+    pass
+
+
+# RetroPie/roms -> /media/ROMs (lowercase and rename genesis)
+@task
+def setup_rom_mounts():
+    pass
+
+
+@task
+def install_retropie():
+    run("rm -rf RetroPie-Setup && git clone --depth=1 https://github.com/RetroPie/RetroPie-Setup.git")
+    with cd("RetroPie-Setup"):
+        sudo("./retropie_setup.sh")
 
 
 @task
 def install_rtl8812au():
+    apt_install(["raspberrypi-kernel-headers"])
     run("rm -rf rtl8812au && git clone https://github.com/gnab/rtl8812au.git")
     with cd("rtl8812au"):
         files.sed("Makefile", "CONFIG_PLATFORM_I386_PC = y", "CONFIG_PLATFORM_I386_PC = n")
@@ -154,6 +179,7 @@ def install_rtlsdr():
     f = StringIO(RTLSDR_BLACKLIST)
     put(f, "/etc/modprobe.d/rtlsdr.conf", use_sudo=True)
 
+
 @task
 def add_user():
     sudo("adduser marc", warn_only=True)
@@ -167,13 +193,21 @@ def change_pi_password():
 
 
 @task
+def install_unifi_controller():
+    sudo("wget -O /etc/apt/trusted.gpg.d/unifi-repo.gpg https://dl.ubnt.com/unifi/unifi-repo.gpg")
+    sudo("echo 'deb http://www.ubnt.com/downloads/unifi/debian stable ubiquiti' | tee /etc/apt/sources.list.d/100-ubnt-unifi.list")
+    sudo("apt-get update")
+    apt_install(["unifi"])
+
+
+@task
 def bootstrap(hostname):
     configure_host(hostname)
     install_packages()
-    add_user()
-    install_kernel_source()
     install_rtl8812au()
     install_kodi()
-    #install_rtlsdr()
+    install_rtlsdr()
+    install_retropie()
+    add_user()
 
 

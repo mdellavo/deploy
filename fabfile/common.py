@@ -1,5 +1,4 @@
 from fabric.operations import sudo
-from fabric.contrib.files import exists
 
 
 def set_timezone(zoneinfo):
@@ -22,3 +21,7 @@ def add_repository(url, name):
 def apt_update():
     sudo("DEBIAN_FRONTEND=noninteractive apt-get update")
 
+
+def apt_upgrade():
+    apt_update()
+    sudo("DEBIAN_FRONTEND=noninteractive apt-get -y upgrade")

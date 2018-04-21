@@ -9,10 +9,9 @@ from fabric.contrib.files import append, exists, uncomment, contains, sed
 from fabric.operations import sudo
 from fabric.context_managers import settings
 
-from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, KNAPSACK_BUCKET_NAME, CONFIGS_PATH
+from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, CONFIGS_PATH
 from .aws import deploy_stack, get_stack_outputs, wait_for_stack
 from .common import apt_install, change_hostname, set_timezone, add_repository, apt_update
-from .website import deploy_website
 
 
 TZ = "America/New_York"
@@ -46,9 +45,14 @@ MAIL_FORWARDS = [
 
 FORWARD_TO = "marc.dellavolpe+{domain}@gmail.com"
 
+CERTS = [
+    "knapsack-api.quuux.org",
+    "snake.quuux.org",
+]
 
-KNAPSACK_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Knapsack")
-KNAPSACK_WEB_PATH = os.path.join(KNAPSACK_PATH, "web", "build")
+CONTAINER_SUBNET = "172.17.0.0/16"
+BRIDGE_IP = "172.17.0.1"
+LISTEN_ADDRESSES = "listen_addresses = '*'"
 
 
 @task
@@ -82,30 +86,25 @@ def update_system():
     sudo("DEBIAN_FRONTEND=noninteractive apt-get -y upgrade")
 
 
-@task
 def setup_unattended_upgrades():
     apt_install(["unattended-upgrades"])
     sudo("DEBIAN_FRONTEND=noninteractive dpkg-reconfigure --priority=low unattended-upgrades")
 
 
-@task
 def install_ntp():
     set_timezone(TZ)
     sysctl("xen.independent_wallclock=1")
     apt_install(["ntp"])
 
 
-@task
 def install_apt():
     apt_install(BASE_PACKAGES)
 
 
-@task
 def set_hostname():
     change_hostname(SHELL_HOSTNAME)
 
 
-@task
 def add_user():
     if not contains("/etc/passwd", USER):
         password = getpass('Password for {}: '.format(USER))
@@ -116,7 +115,6 @@ def add_user():
         sudo("createuser -s -d -r {}".format(USER), user="postgres")
 
 
-@task
 def copy_ssh_id():
     if not exists("/home/{}/.ssh".format(USER)):
         sudo("mkdir /home/{}/.ssh".format(USER), user=USER)
@@ -127,18 +125,10 @@ def copy_ssh_id():
     append("/home/{}/.ssh/authorized_keys".format(USER), pub, use_sudo=True)
 
 
-@task
 def setup_env():
     uncomment("/home/{}/.bashrc".format(USER), '#force_color_prompt=yes', use_sudo=True)
 
 
-CERTS = [
-    "knapsack-api.quuux.org",
-    "snake.quuux.org",
-]
-
-
-@task
 def install_certbot():
     sudo("add-apt-repository ppa:certbot/certbot")
     apt_update()
@@ -153,7 +143,6 @@ def update_certs():
     sudo("certbot renew --nginx -m marc.dellavolpe@gmail.com --agree-tos")
 
 
-@task
 def install_postfix():
     apt_install(["postfix", "opendkim", "opendkim-tools"])
 
@@ -195,7 +184,6 @@ def initialize_ebs(device, mountpoint):
     return should_init
 
 
-@task
 def initialize_volumes():
 
     if initialize_ebs(HOMES_DEVICE, "/home"):
@@ -209,7 +197,6 @@ def initialize_volumes():
     sudo("mount -a")
 
 
-@task
 def install_docker():
     # add docker
     sudo("apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D")
@@ -220,12 +207,6 @@ def install_docker():
     sudo("systemctl enable docker")
 
 
-CONTAINER_SUBNET = "172.17.0.0/16"
-BRIDGE_IP = "172.17.0.1"
-LISTEN_ADDRESSES = "listen_addresses = '*'"
-
-
-@task
 def install_postgres():
     sudo("wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -")
     add_repository("deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main", "postgres")
@@ -241,7 +222,6 @@ def install_postgres():
     sudo("systemctl start postgresql")
 
 
-@task
 def install_nginx():
     sudo("add-apt-repository ppa:nginx/stable")
     apt_update()
@@ -276,88 +256,27 @@ def add_container_host(container_id):
     append("/etc/hosts", "{}\t{}".format(container_address(container_id), container_id), use_sudo=True)
 
 
-@task
-def restart_knapsack():
-    with settings(warn_only=True):
-        sudo("/usr/bin/docker stop -t 2 knapsack")
-        sudo("docker rm knapsack")
-
-    secret = getpass()
-    sudo("/usr/bin/docker run -d --restart always --name knapsack -h knapsack --add-host database:172.17.0.1 -e LOCKBOX_SECRET={} knapsack".format(secret))
-
-
-@task
-def deploy_knapsack():
-    deploy_container("knapsack")
-    restart_knapsack()
-    add_container_host("knapsack")
-
-@task
-def configure_knapsack():
-    update_knapsack_cert()
-
-    with settings(warn_only=True):
-        sudo("createdb knapsack", user="postgres")
-        sudo("createuser knapsack", user="postgres")
-        sudo("psql knapsack -c 'GRANT ALL PRIVILEGES ON DATABASE knapsack TO knapsack'", user="postgres")
-
-    deploy_knapsack()
-
-    nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.knapsack.conf")
-    put(nginx_conf_src, "/etc/nginx/sites-available/knapsack", use_sudo=True)
-    sudo("ln -sf /etc/nginx/sites-available/knapsack /etc/nginx/sites-enabled/knapsack")
-
-    sudo("/etc/init.d/nginx reload")
-
-@task
-def deploy_knapsack_web():
-    deploy_website(KNAPSACK_WEB_PATH, KNAPSACK_BUCKET_NAME)
-
-
-@task
-def deploy_knapsack_monitor():
-    script_path = os.path.join(KNAPSACK_PATH, "scripts", "check-knapsack-api.sh")
-    
-    if not exists("./check-knapsack-api.sh"):
-        put(script_path, ".")
-        run("chmod a+x ./check-knapsack-api.sh")
-
-    run("touch /tmp/crontab")
-    with settings(warn_only=True):
-        run("crontab -l > /tmp/crontab")
-    crontab = "\t".join(("*/10", "*", "*", "*", "*", "./check-knapsack-api.sh"))
-    append("/tmp/crontab", crontab)
-    run("crontab /tmp/crontab")
-
-
-@task
-def deploy_ircd():
-    pass
-
-
-@task
 def install_znc():
     apt_install(["znc"])
 
 
 @task
-def deploy():
+def bootstrap():
     initialize_volumes()
     set_hostname()
     update_system()
     setup_unattended_upgrades()
     install_apt()
     install_ntp()
+    install_certbot()
+
     install_postfix()
     install_znc()
 
     install_docker()
     install_postgres()
-    install_letsencrypt()
     install_nginx()
 
     add_user()
     setup_env()
     copy_ssh_id()
-
-    configure_knapsack()

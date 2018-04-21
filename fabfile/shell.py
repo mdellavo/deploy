@@ -67,7 +67,7 @@ def inspect(name):
 
 
 @task
-def deploy_shell(name="shell"):
+def push_stack(name="shell"):
     conn = boto.connect_cloudformation()
     deploy_stack(conn, name, SHELL_STACK)
     wait_for_stack(conn, name)

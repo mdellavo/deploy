@@ -2,11 +2,15 @@ import os.path
 
 CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 
+
+KNAPSACK_BUCKET_NAME = "knapsack.quuux.org"
+GDAX_TRADER_BUCKET_NAME = "gdax-trader.quuux.org"
+
 # Website config
 STATIC_WEBSITES = [
     # (path, bucket)
     (os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
-    (os.path.expanduser("~/Dropbox/Projects/GDAX/web"), ""),
+    (os.path.expanduser("~/Dropbox/Projects/GDAX/web"), GDAX_TRADER_BUCKET_NAME),
 ]
 
 WEBSITE_STACK = {
@@ -85,9 +89,6 @@ DB_DEVICE_EXT = "i"
 DB_DEVICE = "/dev/xvd" + DB_DEVICE_EXT
 
 DB_PATH = "/db"
-
-KNAPSACK_BUCKET_NAME = "knapsack.quuux.org"
-GDAX_TRADER_BUCKET_NAME = "gdax-trader.quuux.org"
 
 
 SHELL_STACK = {

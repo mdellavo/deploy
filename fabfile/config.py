@@ -2,16 +2,12 @@ import os.path
 
 CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 
+DOMAIN = "quuux.org"
+KNAPSACK_WEB_HOST = "knapsack." + DOMAIN
+GDAX_TRADER_HOST = "gdax-trader." + DOMAIN
+SELF_HOST = "marcdellavolpe.com"
 
-KNAPSACK_BUCKET_NAME = "knapsack.quuux.org"
-GDAX_TRADER_BUCKET_NAME = "gdax-trader.quuux.org"
-
-# Website config
-STATIC_WEBSITES = [
-    # (path, bucket)
-    (os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com"), "marcdellavolpe.com"),
-    (os.path.expanduser("~/Dropbox/Projects/GDAX/web"), GDAX_TRADER_BUCKET_NAME),
-]
+SHELL_HOST = MX = "snake.quuux.org"
 
 WEBSITE_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -22,14 +18,14 @@ WEBSITE_STACK = {
         "ZoneMarcDellaVolpe": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
-                "Name": "marcdellavolpe.com"
+                "Name": SELF_HOST
             }
         },
 
         "BucketMarcDellaVolpeCom": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": "marcdellavolpe.com",
+                "BucketName": SELF_HOST,
                 "AccessControl": "PublicRead",
                 "WebsiteConfiguration": {
                     "IndexDocument": "index.html"
@@ -41,10 +37,10 @@ WEBSITE_STACK = {
             "Type": "AWS::Route53::RecordSetGroup",
             "DependsOn": "ZoneMarcDellaVolpe",
             "Properties": {
-                "HostedZoneName": "marcdellavolpe.com.",
+                "HostedZoneName": SELF_HOST + ".",
                 "RecordSets": [
                     {
-                        "Name": "marcdellavolpe.com.",
+                        "Name": SELF_HOST + ".",
                         "Type": "A",
                         "AliasTarget": {
                             "HostedZoneId": "Z3AQBSTGFYJSTF",
@@ -52,15 +48,15 @@ WEBSITE_STACK = {
                         }
                     },
                     {
-                        "Name": "marcdellavolpe.com.",
+                        "Name": SELF_HOST + ".",
                         "Type": "MX",
                         "TTL": "60",
                         "ResourceRecords": [
-                            "10 snake.quuux.org.",
+                            "10 {}.".format(MX),
                         ]
                     },
                     {
-                        "Name": "marcdellavolpe.com",
+                        "Name": SELF_HOST,
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
@@ -164,7 +160,7 @@ SHELL_STACK = {
         "BucketKnapsackWeb": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": KNAPSACK_BUCKET_NAME,
+                "BucketName": KNAPSACK_WEB_HOST,
                 "AccessControl": "PublicRead",
                 "WebsiteConfiguration": {
                     "IndexDocument": "index.html"
@@ -175,37 +171,40 @@ SHELL_STACK = {
         "BucketGDAXTraderWeb": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": GDAX_TRADER_BUCKET_NAME,
+                "BucketName": GDAX_TRADER_HOST,
                 "AccessControl": "PublicRead",
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html"
+                }
             }
         },
 
         "Zone": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
-                "Name": "quuux.org"
+                "Name": DOMAIN
             }
         },
 
         "Hosts": {
             "Type": "AWS::Route53::RecordSetGroup",
             "Properties": {
-                "HostedZoneName": "quuux.org.",
+                "HostedZoneName": DOMAIN + ".",
                 "RecordSets": [
 
                     # Base
                     {
-                        "Name": "snake.quuux.org.",
+                        "Name": SHELL_HOST + ".",
                         "Type": "A",
                         "TTL": "60",
                         "ResourceRecords": [{"Ref": "IPAddress"}]
                     },
                     {
-                        "Name": "quuux.org.",
+                        "Name": DOMAIN + ".",
                         "Type": "MX",
                         "TTL": "60",
                         "ResourceRecords": [
-                            "10 snake.quuux.org.",
+                            "10 {}.".format(MX),
                         ]
                     },
                     {
@@ -229,10 +228,10 @@ SHELL_STACK = {
 
                     # Knapsack
                     {
-                        "Name": "knapsack.quuux.org.",
+                        "Name": KNAPSACK_WEB_HOST + ".",
                         "Type": "CNAME",
                         "TTL": "60",
-                        "ResourceRecords": ["knapsack.quuux.org.s3-website-us-east-1.amazonaws.com"],
+                        "ResourceRecords": [KNAPSACK_WEB_HOST + ".s3-website-us-east-1.amazonaws.com"],
                     },
                     {
                         "Name": "knapsack-api.quuux.org.",

@@ -39,5 +39,5 @@ def install_retropie():
 
 @task
 def bootstrap(hostname):
-    base.bootstrap(hostname)
+    base.bootstrap()
     install_retropie()

@@ -28,6 +28,6 @@ def install_rtlsdr():
 
 
 @task
-def bootstrap(hostname):
-    base.bootstrap(hostname)
+def bootstrap():
+    base.bootstrap()
     install_rtlsdr()

@@ -3,7 +3,11 @@ import boto
 from boto.s3.key import Key
 from fabric.decorators import task
 from fabfile.aws import deploy_stack, wait_for_stack
-from fabfile.config import STATIC_WEBSITES, WEBSITE_STACK
+from fabfile.config import GDAX_TRADER_HOST, SELF_HOST, WEBSITE_STACK
+
+
+SELF_STATIC_PATH = os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com")
+GDAX_TRADER_STATIC_PATH = os.path.expanduser("~/Dropbox/Projects/GDAX/web/dist")
 
 
 @task
@@ -42,8 +46,22 @@ def deploy_website_stack():
 
 
 @task
+def deploy_website_self():
+    deploy_website(SELF_STATIC_PATH, SELF_HOST)
+
+
+@task
+def deploy_website_gdax_trader():
+    deploy_website(GDAX_TRADER_STATIC_PATH, GDAX_TRADER_HOST)
+
+
+ALL = [
+    deploy_website_self,
+    deploy_website_gdax_trader,
+]
+
+
+@task
 def deploy_websites():
-    for path, bucket_name in STATIC_WEBSITES:
-        deploy_website(path, bucket_name)
-
-
+    for deploy_site in ALL:
+        deploy_site()

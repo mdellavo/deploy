@@ -7,7 +7,7 @@ from fabric.operations import sudo
 from fabric.context_managers import settings
 
 from .website import deploy_website
-from .config import KNAPSACK_BUCKET_NAME, CONFIGS_PATH
+from .config import KNAPSACK_WEB_HOST, CONFIGS_PATH
 from .shell import deploy_container, add_container_host
 
 KNAPSACK_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Knapsack")
@@ -47,7 +47,7 @@ def configure_knapsack():
 
 @task
 def deploy_knapsack_web():
-    deploy_website(KNAPSACK_WEB_PATH, KNAPSACK_BUCKET_NAME)
+    deploy_website(KNAPSACK_WEB_PATH, KNAPSACK_WEB_HOST)
 
 
 @task

@@ -12,6 +12,6 @@ def install_unifi_controller():
 
 
 @task
-def bootstrap(hostname):
-    base.bootstrap(hostname)
+def bootstrap():
+    base.bootstrap()
     install_unifi_controller()

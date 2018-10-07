@@ -14,6 +14,9 @@ PACKAGES = [
     "libncurses5-dev",
     "cmake",
     "libusb-1.0-0.dev",
+    "tmux",
+    "lsb-release",
+    "emacs-nox",
 ]
 
 

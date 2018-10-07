@@ -168,6 +168,13 @@ SHELL_STACK = {
             }
         },
 
+        "BucketMedia": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": "media.quuux.org",
+            }
+        },
+
         "BucketGDAXTraderWeb": {
             "Type": "AWS::S3::Bucket",
             "Properties": {

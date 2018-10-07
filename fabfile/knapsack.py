@@ -1,49 +1,88 @@
 import os
-from getpass import getpass
 
 from fabric.api import task, put, run
 from fabric.contrib.files import append, exists
 from fabric.operations import sudo
 from fabric.context_managers import settings
+from fabric.contrib.project import rsync_project
 
 from .website import deploy_website
 from .config import KNAPSACK_WEB_HOST, CONFIGS_PATH
-from .shell import deploy_container, add_container_host
 
 KNAPSACK_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Knapsack")
 KNAPSACK_WEB_PATH = os.path.join(KNAPSACK_PATH, "web", "build")
+KNAPSACK_BACKEND_PATH = os.path.join(KNAPSACK_PATH, "backend")
+
+
+@task
+def sync_knapsack():
+    sudo("mkdir -p /site/knapsack")
+    rsync_project(
+        remote_dir="/tmp/knapsack/",
+        local_dir=KNAPSACK_BACKEND_PATH + "/*",
+        exclude=[
+            "*.pyc",
+            ".idea",
+            #"*.egg-info",
+            "*.sqlite",
+            "development.ini",
+            "Dockerfile*",
+        ],
+        delete=True,
+    )
+    sudo("rm -rf /site/knapsack")
+    sudo("mv /tmp/knapsack /site")
+    sudo("chown -R knapsack:knapsack /site/knapsack")
+
 
 @task
 def restart_knapsack():
-    with settings(warn_only=True):
-        sudo("/usr/bin/docker stop -t 2 knapsack")
-        sudo("docker rm knapsack")
-
-    secret = getpass()
-    sudo("/usr/bin/docker run -d --restart always --name knapsack -h knapsack --add-host database:172.17.0.1 -e LOCKBOX_SECRET={} knapsack".format(secret))
+    sudo("/etc/init.d/knapsack reload")
 
 
 @task
 def deploy_knapsack():
-    deploy_container("knapsack")
+    sync_knapsack()
     restart_knapsack()
-    add_container_host("knapsack")
+
 
 @task
 def configure_knapsack():
 
     with settings(warn_only=True):
+        sudo("useradd -r knapsack")
+
         sudo("createdb knapsack", user="postgres")
         sudo("createuser knapsack", user="postgres")
         sudo("psql knapsack -c 'GRANT ALL PRIVILEGES ON DATABASE knapsack TO knapsack'", user="postgres")
 
-    deploy_knapsack()
+    sync_knapsack()
+
+    with settings(warn_only=True):
+        sudo("virtualenv /site/venv")
+        sudo("/site/venv/bin/pip install -r /site/knapsack/requirements.txt")
+
+        sudo("mkdir -p /site/logs")
+        sudo("chmod 0777 /site/logs")
+
+    knapsack_service = os.path.join(CONFIGS_PATH, "knapsack.service")
+    put(knapsack_service, "/etc/systemd/system/", use_sudo=True)
+
+    append(
+        "/etc/tmpfiles.d/knapsack.conf",
+        "d /run/knapsack 0755 knapsack knapsack -",
+        use_sudo=True,
+    )
+
+    sudo("systemctl enable knapsack.service")
+    sudo("systemctl start knapsack.service")
 
     nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.knapsack.conf")
     put(nginx_conf_src, "/etc/nginx/sites-available/knapsack", use_sudo=True)
     sudo("ln -sf /etc/nginx/sites-available/knapsack /etc/nginx/sites-enabled/knapsack")
 
     sudo("/etc/init.d/nginx reload")
+
 
 @task
 def deploy_knapsack_web():

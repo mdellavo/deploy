@@ -4,7 +4,7 @@ from crypt import crypt
 from getpass import getpass
 
 import boto
-from fabric.api import env, task, local, put, run
+from fabric.api import env, task, put, run
 from fabric.contrib.files import append, exists, uncomment, contains, sed
 from fabric.operations import sudo
 from fabric.context_managers import settings
@@ -197,16 +197,6 @@ def initialize_volumes():
     sudo("mount -a")
 
 
-def install_docker():
-    # add docker
-    sudo("apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D")
-    add_repository("deb https://apt.dockerproject.org/repo ubuntu-xenial main", "docker")
-    apt_update()
-    apt_install(["docker-engine"])
-    sudo("service docker start")
-    sudo("systemctl enable docker")
-
-
 def install_postgres():
     sudo("wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -")
     add_repository("deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main", "postgres")
@@ -236,26 +226,6 @@ def install_nginx():
     sudo("/etc/init.d/nginx restart")
 
 
-def deploy_container(container_id):
-    path = "/tmp/{}.tar".format(container_id)
-    local("docker save -o {} {}".format(path, container_id))
-    put(path, path)
-    sudo("docker load -i {}".format(path))
-
-    rm = "rm {}".format(path)
-    run(rm)
-    local(rm)
-
-
-def container_address(container_id):
-    return sudo("docker inspect {}|jq -r .[].NetworkSettings.IPAddress".format(container_id))
-
-
-def add_container_host(container_id):
-    sudo("sed -i /{}/d /etc/hosts".format(container_id))
-    append("/etc/hosts", "{}\t{}".format(container_address(container_id), container_id), use_sudo=True)
-
-
 def install_znc():
     apt_install(["znc"])
 
@@ -273,7 +243,6 @@ def bootstrap():
     install_postfix()
     install_znc()
 
-    install_docker()
     install_postgres()
     install_nginx()
 

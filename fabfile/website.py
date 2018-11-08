@@ -2,7 +2,7 @@ import os
 import boto
 from boto.s3.key import Key
 from fabric.decorators import task
-from fabfile.aws import deploy_stack, wait_for_stack
+from fabfile.aws import deploy_stack
 from fabfile.config import GDAX_TRADER_HOST, SELF_HOST, WEBSITE_STACK
 
 
@@ -40,9 +40,7 @@ def deploy_website(path, bucket_name):
 
 @task
 def deploy_website_stack():
-    conn = boto.connect_cloudformation()
-    deploy_stack(conn, 'website', WEBSITE_STACK)
-    wait_for_stack(conn, 'website')
+    deploy_stack('website', WEBSITE_STACK)
 
 
 @task

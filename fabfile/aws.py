@@ -1,26 +1,19 @@
 import json
-from time import sleep
+import time
+
+from .config import REGION
+
+import boto3
 
 
 def existing_stacks(c):
-    return [s.stack_name for s in c.describe_stacks()]
+    return [s["StackName"] for s in c.describe_stacks()["Stacks"]]
 
 
-def deploy_stack(conn, name, stack):
-    if name not in existing_stacks(conn):
-        conn.create_stack(name, template_body=json.dumps(stack))
+def deploy_stack(name, stack):
+    client = boto3.client('cloudformation', region_name=REGION)
+
+    if name not in existing_stacks(client):
+        client.create_stack(StackName=name, TemplateBody=json.dumps(stack))
     else:
-        conn.update_stack(name, template_body=json.dumps(stack))
-
-
-def get_stack_outputs(conn, name):
-    return {output.key: output.value for output in conn.describe_stacks(name)[0].outputs}
-
-
-def wait_for_stack(conn, name, timeout=10):
-    while True:
-        rv = conn.describe_stacks(name)
-        print rv[0].stack_status
-        if rv[0].stack_status.endswith('_COMPLETE'):
-            break
-        sleep(timeout)
+        client.create_change_set(StackName=name, TemplateBody=json.dumps(stack), ChangeSetName=name + "-" + str(int(time.time())))

@@ -72,17 +72,18 @@ WEBSITE_STACK = {
 
 # Shell config
 
-AZ = "us-east-1b"
-SHELL_SIZE = "t2.small"
-SHELL_AMI = "ami-45b69e52"
+REGION = "us-east-1"
+AZ = REGION + "b"
+SHELL_SIZE = "t3.nano"
+SHELL_AMI = "ami-05aa248bfb1c99d0f"
 
 HOMES_SIZE = "25"  # GB
 HOMES_DEVICE_EXT = "h"
-HOMES_DEVICE = "/dev/xvd" + HOMES_DEVICE_EXT
+HOMES_DEVICE = "/dev/nvme0n1"
 
 DB_SIZE = "5"  # GB
 DB_DEVICE_EXT = "i"
-DB_DEVICE = "/dev/xvd" + DB_DEVICE_EXT
+DB_DEVICE = "/dev/nvme2n1"
 
 DB_PATH = "/db"
 
@@ -121,6 +122,12 @@ SHELL_STACK = {
                         "DeviceIndex": "0",
                         "GroupSet": [{"Ref": "InstanceSecurityGroup"}],
                         "SubnetId": {"Ref": "Subnet"}
+                    }
+                ],
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {"VolumeSize": "10"}
                     }
                 ],
                 "Volumes": [
@@ -165,13 +172,6 @@ SHELL_STACK = {
                 "WebsiteConfiguration": {
                     "IndexDocument": "index.html"
                 }
-            }
-        },
-
-        "BucketMedia": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": "media.quuux.org",
             }
         },
 
@@ -228,9 +228,10 @@ SHELL_STACK = {
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
-                            "\"v=DKIM1; k=rsa; t=y; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDF0Y5593vEcohWnswvrcLcsh6Jze6AVfpxsSkAh06d9ulb3NMlwdPPJ/Z0/GfjM5WNrMK9UpbgBo+s/UrfJpt8uTcy607Xe5Fxvwf7ZdV7TB6tIbrGOudhwt3dJa3oEndomscG4yuactzJk8IBIM6le7eHfmJAr42nBnhnY5/OmQIDAQAB\""
+                            ("\"v=DKIM1; h=sha256; k=rsa; t=y; \""
+                             "\"p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs4jk+Afzrdq2CMnWe5/iKFuKTqrkTeN8Uhw5hy1t0umUAyGt+d2T/THwk4NYeMDpsTqN9Tez1v10z8oguT7yLh3HMorgwe32F+aF5A1+uK5JqpTedVV9HRhGtV9ZJsikcATrLPCR5oUjxoJ47qE2+yQIFu/nAvgXWxv70bQfpqq0Nub6ydNoDjTsom+Uh5uL4b2sm0ldehp2b1\""
+                             "\"rqrGSVzuA+R7ZNrkhZjzSW+zzUMRvkvQhWo9EUb7gSVNKUWzGH8sUH2QZPAlQur7kyG4rYF94aEOMPUPKSGgULJqo0bjzD+SPQdKMsquxgbPCo3noPHmOBP3RM7rHJO/ovGTYE3wIDAQAB\"")
                         ]
-
                     },
 
                     # Knapsack

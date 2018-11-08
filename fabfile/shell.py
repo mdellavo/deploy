@@ -10,16 +10,14 @@ from fabric.operations import sudo
 from fabric.context_managers import settings
 
 from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, CONFIGS_PATH
-from .aws import deploy_stack, get_stack_outputs, wait_for_stack
+from .aws import deploy_stack
 from .common import apt_install, change_hostname, set_timezone, add_repository, apt_update
 
 
-TZ = "America/New_York"
 USER = "marc"
 SHELL_HOSTNAME = "snake.quuux.org"
 
 BASE_PACKAGES = [
-    "python-software-properties",
     "apt-transport-https",
     "ca-certificates",
     "curl",
@@ -30,10 +28,6 @@ BASE_PACKAGES = [
     "python-dev",
     "tmux",
     "git",
-    "irssi",
-    "irssi-scripts",
-    "aspell",
-    "libtext-aspell-perl",
     "jq",
     "mailutils",
 ]
@@ -50,29 +44,9 @@ CERTS = [
     "snake.quuux.org",
 ]
 
-CONTAINER_SUBNET = "172.17.0.0/16"
-BRIDGE_IP = "172.17.0.1"
-LISTEN_ADDRESSES = "listen_addresses = '*'"
-
-
-@task
-def inspect(name):
-    conn = boto.connect_cloudformation()
-
-    outputs = get_stack_outputs(conn, name)
-    pprint.pprint(outputs)
-
-    env.user = "ubuntu"
-    env.hosts = [outputs["PublicDNS"]]
-
-
 @task
 def push_stack(name="shell"):
-    conn = boto.connect_cloudformation()
-    deploy_stack(conn, name, SHELL_STACK)
-    wait_for_stack(conn, name)
-    rv = get_stack_outputs(conn, name)
-    pprint.pprint(rv)
+    deploy_stack(name, SHELL_STACK)
 
 
 def sysctl(setting):
@@ -92,7 +66,6 @@ def setup_unattended_upgrades():
 
 
 def install_ntp():
-    set_timezone(TZ)
     sysctl("xen.independent_wallclock=1")
     apt_install(["ntp"])
 
@@ -109,10 +82,7 @@ def add_user():
     if not contains("/etc/passwd", USER):
         password = getpass('Password for {}: '.format(USER))
         crypted_password = crypt(password, 'salt')
-        sudo("useradd -m -G sudo,docker -s /bin/bash -p {} {} ".format(crypted_password, USER))
-
-    with settings(warn_only=True):
-        sudo("createuser -s -d -r {}".format(USER), user="postgres")
+        sudo("useradd -m -G sudo -s /bin/bash -p {} {} ".format(crypted_password, USER))
 
 
 def copy_ssh_id():
@@ -143,6 +113,7 @@ def update_certs():
     sudo("certbot renew --nginx -m marc.dellavolpe@gmail.com --agree-tos")
 
 
+@task
 def install_postfix():
     apt_install(["postfix", "opendkim", "opendkim-tools"])
 
@@ -153,11 +124,13 @@ def install_postfix():
 
     run("opendkim-genkey -t -s mail -d quuux.org")
     sudo("mv mail.private /etc/dkimkeys/mail.key.pem")
-    sudo("chown opendkim /etc/dkimkeys/mail.key.pem")
+    sudo("chown root:root /etc/dkimkeys/mail.key.pem")
     sudo("chmod 0600 /etc/dkimkeys/mail.key.pem")
     run("cat mail.txt")
 
     append("/etc/default/opendkim", "SOCKET=\"inet:8891@localhost\"", use_sudo=True)
+    sudo("/lib/opendkim/opendkim.service.generate")
+    sudo("systemctl daemon-reload")
     sudo("service opendkim restart")
 
     postfix_conf_src = os.path.join(CONFIGS_PATH, "postfix.conf")
@@ -184,34 +157,29 @@ def initialize_ebs(device, mountpoint):
     return should_init
 
 
+@task
 def initialize_volumes():
-
-    if initialize_ebs(HOMES_DEVICE, "/home"):
-        sudo("mount {} -t ext4 /media".format(HOMES_DEVICE))
-        sudo("rsync -aXS /home/. /media/")
-        sudo("umount /media")
-
-    if initialize_ebs(DB_DEVICE, DB_PATH):
-        sudo("chown postgres:postgres {}".format(DB_PATH))
-
+    initialize_ebs(HOMES_DEVICE, "/home")
+    initialize_ebs(DB_DEVICE, DB_PATH)
     sudo("mount -a")
 
 
+@task
 def install_postgres():
     sudo("wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -")
-    add_repository("deb http://apt.postgresql.org/pub/repos/apt/ xenial-pgdg main", "postgres")
+    add_repository("deb http://apt.postgresql.org/pub/repos/apt/ bionic-pgdg main", "postgres")
     apt_update()
     apt_install(["postgresql", "postgresql-contrib"])
     sudo("systemctl stop postgresql")
-    sed("/etc/postgresql/9.6/main/postgresql.conf", "/var/lib/postgresql/9.6/main", "/db/postgres/main", use_sudo=True)
-    if not contains("/etc/postgresql/9.6/main/pg_hba.conf", CONTAINER_SUBNET):
-        append("/etc/postgresql/9.6/main/pg_hba.conf", "host\tall\tall\t{}\ttrust".format(CONTAINER_SUBNET), use_sudo=True)
 
-    if not contains("/etc/postgresql/9.6/main/postgresql.conf", LISTEN_ADDRESSES):
-        append("/etc/postgresql/9.6/main/postgresql.conf", LISTEN_ADDRESSES, use_sudo=True)
+    sed("/etc/postgresql/11/main/postgresql.conf", "/var/lib/postgresql/11/main", "/db/postgres/11/main", use_sudo=True)
+
     sudo("systemctl start postgresql")
+    with settings(warn_only=True):
+        sudo("createuser -s -d -r {}".format(USER), user="postgres")
 
 
+@task
 def install_nginx():
     sudo("add-apt-repository ppa:nginx/stable")
     apt_update()
@@ -220,12 +188,13 @@ def install_nginx():
     nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.snake.conf")
     put(nginx_conf_src, "/etc/nginx/sites-available/default", use_sudo=True)
 
-    # sudo("rm /var/www/html/index.nginx-debian.html")
-    # sudo("touch /var/www/html/index.html")
+    sudo("rm /var/www/html/index.nginx-debian.html")
+    sudo("touch /var/www/html/index.html")
 
-    sudo("/etc/init.d/nginx restart")
+    sudo("systemctl start restart")
 
 
+@task
 def install_znc():
     apt_install(["znc"])
 
@@ -238,14 +207,13 @@ def bootstrap():
     setup_unattended_upgrades()
     install_apt()
     install_ntp()
-    install_certbot()
 
     install_postfix()
     install_znc()
 
-    install_postgres()
+    #install_postgres()
     install_nginx()
+    install_certbot()
 
     add_user()
-    setup_env()
     copy_ssh_id()

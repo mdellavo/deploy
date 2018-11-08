@@ -1,17 +1,15 @@
 import os
-import pprint
 from crypt import crypt
 from getpass import getpass
 
-import boto
-from fabric.api import env, task, put, run
+from fabric.api import task, put, run
 from fabric.contrib.files import append, exists, uncomment, contains, sed
 from fabric.operations import sudo
 from fabric.context_managers import settings
 
 from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, CONFIGS_PATH
 from .aws import deploy_stack
-from .common import apt_install, change_hostname, set_timezone, add_repository, apt_update
+from .common import apt_install, change_hostname, add_repository, apt_update
 
 
 USER = "marc"
@@ -211,7 +209,7 @@ def bootstrap():
     install_postfix()
     install_znc()
 
-    #install_postgres()
+    install_postgres()
     install_nginx()
     install_certbot()
 

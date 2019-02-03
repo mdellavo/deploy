@@ -58,12 +58,12 @@ def configure_knapsack():
 
     sync_knapsack()
 
-    with settings(warn_only=True):
-        sudo("virtualenv /site/venv")
-        sudo("/site/venv/bin/pip install -r /site/knapsack/requirements.txt")
+    sudo("pip install virtualenv")
+    sudo("virtualenv /site/venv")
+    sudo("/site/venv/bin/pip install -r /site/knapsack/requirements.txt")
 
-        sudo("mkdir -p /site/logs")
-        sudo("chmod 0777 /site/logs")
+    sudo("mkdir -p /site/logs")
+    sudo("chmod 0777 /site/logs")
 
     knapsack_service = os.path.join(CONFIGS_PATH, "knapsack.service")
     put(knapsack_service, "/etc/systemd/system/", use_sudo=True)

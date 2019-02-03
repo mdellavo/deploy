@@ -5,6 +5,7 @@ CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 DOMAIN = "quuux.org"
 KNAPSACK_WEB_HOST = "knapsack." + DOMAIN
 GDAX_TRADER_HOST = "gdax-trader." + DOMAIN
+ROGUE_WEB_HOST = "rogue." + DOMAIN
 SELF_HOST = "marcdellavolpe.com"
 
 SHELL_HOST = MX = "snake.quuux.org"
@@ -186,6 +187,17 @@ SHELL_STACK = {
             }
         },
 
+        "BucketRogue": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": ROGUE_WEB_HOST,
+                "AccessControl": "PublicRead",
+                "WebsiteConfiguration": {
+                    "IndexDocument": "index.html"
+                }
+            }
+        },
+
         "Zone": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
@@ -211,26 +223,35 @@ SHELL_STACK = {
                         "Type": "MX",
                         "TTL": "60",
                         "ResourceRecords": [
-                            "10 {}.".format(MX),
+                            "10 mail.protonmail.ch",
+                            "20 mailsec.protonmail.ch",
                         ]
                     },
                     {
-                        "Name": "quuux.org.",
+                        "Name": DOMAIN + ".",
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
-                            "\"v=spf1 mx -all\"",
                             "\"google-site-verification=Jkx3pb3aspcyfy4-GVUtFkWB4ug24Q-bvfFX14qFGHw\"",
+                            "\"protonmail-verification=bb9eafc6f738e161de43489531df78519f295cbc\"",
+                            "\"v=spf1 include:_spf.protonmail.ch mx ~all\"",
                         ]
                     },
                     {
-                        "Name": "mail._domainkey.quuux.org.",
+                        "Name": "protonmail._domainkey." + DOMAIN + ".",
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
-                            ("\"v=DKIM1; h=sha256; k=rsa; t=y; \""
-                             "\"p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs4jk+Afzrdq2CMnWe5/iKFuKTqrkTeN8Uhw5hy1t0umUAyGt+d2T/THwk4NYeMDpsTqN9Tez1v10z8oguT7yLh3HMorgwe32F+aF5A1+uK5JqpTedVV9HRhGtV9ZJsikcATrLPCR5oUjxoJ47qE2+yQIFu/nAvgXWxv70bQfpqq0Nub6ydNoDjTsom+Uh5uL4b2sm0ldehp2b1\""
-                             "\"rqrGSVzuA+R7ZNrkhZjzSW+zzUMRvkvQhWo9EUb7gSVNKUWzGH8sUH2QZPAlQur7kyG4rYF94aEOMPUPKSGgULJqo0bjzD+SPQdKMsquxgbPCo3noPHmOBP3RM7rHJO/ovGTYE3wIDAQAB\"")
+                            "\"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC54jxKMSSMSd48+88jUe3uW97eFe6D5ew2HyGlfTKnFS7Qkd9UMpxcOpsJbbzSKA/dOLQOvyWuz7DDOc03WSzDlAJvn/CPZ/w4NNLWPQuBKRD7Kt7KxgvXeHewjpdIzS1gQIfmekRlIG+hL9qd5PQ2cgDzamjrZgdk1V3ce2MUOQIDAQAB\"",
+
+                        ]
+                    },
+                    {
+                        "Name": "_dmarc." + DOMAIN + ".",
+                        "Type": "TXT",
+                        "TTL": "60",
+                        "ResourceRecords": [
+                            "\"v=DMARC1; p=none; rua=mailto:address@yourdomain.com\"",
                         ]
                     },
 
@@ -243,6 +264,20 @@ SHELL_STACK = {
                     },
                     {
                         "Name": "knapsack-api.quuux.org.",
+                        "Type": "A",
+                        "TTL": "60",
+                        "ResourceRecords": [{"Ref": "IPAddress"}]
+                    },
+
+                    # Rogue
+                    {
+                        "Name": ROGUE_WEB_HOST + ".",
+                        "Type": "CNAME",
+                        "TTL": "60",
+                        "ResourceRecords": [ROGUE_WEB_HOST + ".s3-website-us-east-1.amazonaws.com"],
+                    },
+                    {
+                        "Name": "rogue-api.quuux.org.",
                         "Type": "A",
                         "TTL": "60",
                         "ResourceRecords": [{"Ref": "IPAddress"}]
@@ -327,6 +362,36 @@ SHELL_STACK = {
                 "RuleNumber": "104"
             }
         },
+        "InboundIRCSNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "9999",
+                    "To": "9999"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "106"
+            }
+        },
+        "InboundRogueNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "8080",
+                    "To": "8080"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "108"
+            }
+        },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -355,6 +420,18 @@ SHELL_STACK = {
                         "FromPort": "443",
                         "IpProtocol": "tcp",
                         "ToPort": "443"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "8080",
+                        "IpProtocol": "tcp",
+                        "ToPort": "8080"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "9999",
+                        "IpProtocol": "tcp",
+                        "ToPort": "9999"
                     },
                 ],
                 "VpcId": {"Ref": "VPC"}

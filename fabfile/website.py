@@ -10,7 +10,6 @@ SELF_STATIC_PATH = os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com")
 GDAX_TRADER_STATIC_PATH = os.path.expanduser("~/Dropbox/Projects/GDAX/web/dist")
 
 
-@task
 def deploy_website(path, bucket_name):
     conn = boto.connect_s3()
     bucket = conn.get_bucket(bucket_name)

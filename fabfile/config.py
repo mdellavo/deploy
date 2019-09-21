@@ -2,13 +2,16 @@ import os.path
 
 CONFIGS_PATH = os.path.join(os.path.dirname(__file__), "..", "config")
 
-DOMAIN = "quuux.org"
-KNAPSACK_WEB_HOST = "knapsack." + DOMAIN
-GDAX_TRADER_HOST = "gdax-trader." + DOMAIN
-ROGUE_WEB_HOST = "rogue." + DOMAIN
+QUUUX_DOMAIN = "quuux.org"
+KNAPSACK_WEB_HOST = "knapsack." + QUUUX_DOMAIN
+GDAX_TRADER_HOST = "gdax-trader." + QUUUX_DOMAIN
+ROGUE_WEB_HOST = "rogue." + QUUUX_DOMAIN
 SELF_HOST = "marcdellavolpe.com"
 
 SHELL_HOST = MX = "snake.quuux.org"
+
+POUNDTOWN_DOMAIN = "ound.town"
+POUNDTOWN_HOST = "p." + POUNDTOWN_DOMAIN
 
 WEBSITE_STACK = {
     "AWSTemplateFormatVersion": "2010-09-09",
@@ -201,16 +204,15 @@ SHELL_STACK = {
         "Zone": {
             "Type": "AWS::Route53::HostedZone",
             "Properties": {
-                "Name": DOMAIN
+                "Name": QUUUX_DOMAIN
             }
         },
 
         "Hosts": {
             "Type": "AWS::Route53::RecordSetGroup",
             "Properties": {
-                "HostedZoneName": DOMAIN + ".",
+                "HostedZoneName": QUUUX_DOMAIN + ".",
                 "RecordSets": [
-
                     # Base
                     {
                         "Name": SHELL_HOST + ".",
@@ -219,7 +221,7 @@ SHELL_STACK = {
                         "ResourceRecords": [{"Ref": "IPAddress"}]
                     },
                     {
-                        "Name": DOMAIN + ".",
+                        "Name": QUUUX_DOMAIN + ".",
                         "Type": "MX",
                         "TTL": "60",
                         "ResourceRecords": [
@@ -228,7 +230,7 @@ SHELL_STACK = {
                         ]
                     },
                     {
-                        "Name": DOMAIN + ".",
+                        "Name": QUUUX_DOMAIN + ".",
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
@@ -238,7 +240,7 @@ SHELL_STACK = {
                         ]
                     },
                     {
-                        "Name": "protonmail._domainkey." + DOMAIN + ".",
+                        "Name": "protonmail._domainkey." + QUUUX_DOMAIN + ".",
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
@@ -247,7 +249,7 @@ SHELL_STACK = {
                         ]
                     },
                     {
-                        "Name": "_dmarc." + DOMAIN + ".",
+                        "Name": "_dmarc." + QUUUX_DOMAIN + ".",
                         "Type": "TXT",
                         "TTL": "60",
                         "ResourceRecords": [
@@ -282,7 +284,27 @@ SHELL_STACK = {
                         "TTL": "60",
                         "ResourceRecords": [{"Ref": "IPAddress"}]
                     },
+                ]
+            },
+        },
 
+        "PoundtownZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "Name": POUNDTOWN_DOMAIN
+            }
+        },
+        "PoundtownHosts": {
+            "Type": "AWS::Route53::RecordSetGroup",
+            "Properties": {
+                "HostedZoneName": POUNDTOWN_DOMAIN + ".",
+                "RecordSets": [
+                    {
+                        "Name": POUNDTOWN_HOST + ".",
+                        "Type": "A",
+                        "TTL": "60",
+                        "ResourceRecords": [{"Ref": "IPAddress"}]
+                    },
                 ]
             },
         },
@@ -392,6 +414,21 @@ SHELL_STACK = {
                 "RuleNumber": "108"
             }
         },
+        "InboundIRCLinkNetworkAclEntry": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "CidrBlock": "0.0.0.0/0",
+                "Egress": "false",
+                "NetworkAclId": {"Ref": "NetworkAcl"},
+                "PortRange": {
+                    "From": "7777",
+                    "To": "7777"
+                },
+                "Protocol": "6",
+                "RuleAction": "allow",
+                "RuleNumber": "109"
+            }
+        },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -432,6 +469,12 @@ SHELL_STACK = {
                         "FromPort": "9999",
                         "IpProtocol": "tcp",
                         "ToPort": "9999"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "FromPort": "7777",
+                        "IpProtocol": "tcp",
+                        "ToPort": "7777"
                     },
                 ],
                 "VpcId": {"Ref": "VPC"}

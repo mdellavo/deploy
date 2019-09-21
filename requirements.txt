@@ -1,2 +1,2 @@
-boto
-fabric
+boto3
+fabric==1.14.1

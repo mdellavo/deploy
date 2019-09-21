@@ -1,18 +1,20 @@
 import os
-import boto
+import boto3
+import mimetypes
 from boto.s3.key import Key
+from fabric.api import local
 from fabric.decorators import task
 from fabfile.aws import deploy_stack
 from fabfile.config import GDAX_TRADER_HOST, SELF_HOST, WEBSITE_STACK
 
 
-SELF_STATIC_PATH = os.path.expanduser("~/Dropbox/Web/marcdellavolpe.com")
+SELF_STATIC_PATH = os.path.expanduser("~/Projects/marcdellavolpe.com")
+SELF_BUILD_PATH = SELF_STATIC_PATH + "/_site"
 GDAX_TRADER_STATIC_PATH = os.path.expanduser("~/Dropbox/Projects/GDAX/web/dist")
 
 
 def deploy_website(path, bucket_name):
-    conn = boto.connect_s3()
-    bucket = conn.get_bucket(bucket_name)
+    client = boto3.client('s3')
 
     def upload(_, dirname, filenames):
 
@@ -27,12 +29,16 @@ def deploy_website(path, bucket_name):
         for f in files:
             local_path = os.path.join(dirname, f)
             remote_path = local_path[len(path) + 1:]
-
-            print local_path, '->', remote_path
-            k = Key(bucket)
-            k.key = remote_path
+            mimetype, _ = mimetypes.guess_type(local_path)
+            print(local_path, '->', remote_path)
             with open(local_path) as contents:
-                k.set_contents_from_file(contents, policy='public-read')
+                client.put_object(
+                    Bucket=bucket_name,
+                    Key=remote_path,
+                    Body=contents,
+                    ACL="public-read",
+                    ContentType=mimetype or "binary/octet",
+                )
 
     os.path.walk(path, upload, None)
 
@@ -44,7 +50,8 @@ def deploy_website_stack():
 
 @task
 def deploy_website_self():
-    deploy_website(SELF_STATIC_PATH, SELF_HOST)
+    local("jekyll build -s " + SELF_STATIC_PATH + " -d " + SELF_BUILD_PATH)
+    deploy_website(SELF_BUILD_PATH, SELF_HOST)
 
 
 @task

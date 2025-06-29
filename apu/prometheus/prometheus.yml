@@ -1,0 +1,165 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first.rules"
+  # - "second.rules"
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+    - targets: [localhost:9090]
+  - job_name: collectd
+    static_configs:
+    - targets:
+        - 100.91.178.85:9103
+        - atomic.local:9103
+        - mojo.local:9103
+        - lisa.local:9103
+        - maggie.local:9103
+  - job_name: node
+    static_configs:
+    - targets:
+        - lisa.local:9100
+        - maggie.local:9100
+        - marge.local:9100
+        - mojo.local:9100
+        - atomic.local:9100
+        - synology.local:9100
+  - job_name: node-s
+    metrics_path: /metrics/node
+    scheme: https
+    basic_auth:
+      username: prom
+      password: prom
+    static_configs:
+    - targets:
+        - frink.quuux.org
+  - job_name: blackbox_http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://frink.quuux.org
+        - https://p.ound.town
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: mojo.local:9115
+  - job_name: blackbox_irc
+    metrics_path: /probe
+    params:
+      module: [irc]
+    static_configs:
+      - targets:
+        - p.ound.town:9999
+        - c.ool.town:9999
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: mojo.local:9115
+  - job_name: blackbox_ping
+    metrics_path: /probe
+    params:
+      module: [ping]
+    static_configs:
+      - targets:
+        - frink.quuux.org
+        - lisa.local
+        - maggie.local
+        - mojo.local
+        - marge.local
+        - atomic.local
+        - usg.local
+        - usw.local
+        - uap.local
+        - synology.local
+        - printer.local
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: mojo.local:9115
+  - job_name: cadvisor
+    scrape_interval: 5s
+    static_configs:
+      - targets:
+        - mojo.local:8280
+        - 100.91.178.85:8280
+        - atomic.local:8280
+  - job_name: apc
+    static_configs:
+    - targets:
+        - mojo.local:9162
+  - job_name: unifipoller
+    scrape_interval: 30s
+    metrics_path: /metrics
+    static_configs:
+    - targets:
+        - mojo.local:9130
+  # - job_name: nginx
+  #   static_configs:
+  #   - targets:
+  #       - atomic.local:9113
+  - job_name: nginxlog
+    metrics_path: /metrics/nginx
+    scheme: https
+    basic_auth:
+      username: prom
+      password: prom
+    static_configs:
+    - targets:
+        - frink.quuux.org
+  - job_name: synapse
+    metrics_path: /metrics/synapse
+    scheme: https
+    basic_auth:
+      username: prom
+      password: prom
+    static_configs:
+    - targets:
+        - frink.quuux.org
+  - job_name: synology-snmp
+    static_configs:
+    - targets:
+        - synology.local
+    metrics_path: /snmp
+    params:
+      module: [synology]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: mojo.local:9116
+
+  - job_name: prom-plex
+    static_configs:
+    - targets:
+      - mojo.local:9000
+
+  - job_name: sonarr-exporter
+    static_configs:
+    - targets:
+      - mojo.local:9707
+
+  - job_name: radarr-exporter
+    static_configs:
+    - targets:
+      - mojo.local:9708
+
+  - job_name: sabnzbd-exporter
+    static_configs:
+    - targets:
+      - mojo.local:9711

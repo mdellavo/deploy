@@ -1,0 +1,28 @@
+id: matrix-hookshot # This can be anything, but must be unique within your homeserver
+as_token: 5c6b5144b8d333a9083f5adb92554c2a33ac73afa2bf8269ebc62c4405386a27 # This again can be a random string
+hs_token: dd349e9592bf7bdd1555437beb948f6d0784c99aebe1e8e08817a60d04023322 # ..as can this
+namespaces:
+  rooms: []
+  users: # In the following, p.ound.town is your homeserver's domain
+    - regex: "@_github_.*:p.ound.town"
+      exclusive: true
+    - regex: "@_gitlab_.*:p.ound.town"
+      exclusive: true
+    - regex: "@_jira_.*:p.ound.town"
+      exclusive: true
+    - regex: "@_webhooks_.*:p.ound.town" # Where _webhooks_ is set by userIdPrefix in config.yml
+      exclusive: true
+    - regex: "@feeds:p.ound.town" # Matches the localpart of all serviceBots in config.yml
+      exclusive: true
+  aliases:
+    - regex: "#github_.+:p.ound.town" # Where p.ound.town is your homeserver's domain
+      exclusive: true
+
+sender_localpart: hookshot
+url: "http://localhost:9993" # This should match the bridge.port in your config file
+rate_limited: false
+
+# If enabling encryption
+de.sorunome.msc2409.push_ephemeral: true
+push_ephemeral: true
+org.matrix.msc3202: true

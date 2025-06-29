@@ -1,0 +1,32 @@
+
+server {
+    listen 443 ssl;
+
+    server_name quuux.org;
+    root /var/www/quuux.org;
+    index index.html;
+    ssl_certificate /etc/letsencrypt/live/quuux.org/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/quuux.org/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    
+
+}
+
+server {
+    listen 80;
+    server_name quuux.org;
+
+    if ($host = quuux.org) {
+        return 301 https://$host$request_uri;
+    }
+
+    return 404;
+
+
+}

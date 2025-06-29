@@ -1,6 +1,4 @@
 
-import shell
-import website
-import rpi
-import knapsack
-import rogue
+from . import shell
+from . import website
+from . import rogue

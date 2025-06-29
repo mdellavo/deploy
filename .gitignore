@@ -2,3 +2,6 @@
 *.pem
 .idea
 *.iml
+*.DS_Store
+.terraform*
+*.tfstate*

@@ -1,0 +1,14 @@
+version: "2.1"
+services:
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - /Users/marc/.sabnzbd:/config
+    ports:
+      - 8080:8080
+    restart: unless-stopped

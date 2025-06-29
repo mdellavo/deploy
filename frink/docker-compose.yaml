@@ -1,0 +1,79 @@
+version: "3"
+services:
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8280:8080"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://100.82.224.98:3100/loki/api/v1/push"
+
+  postgres:
+    image: postgres
+    container_name: postgres
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_USER: synapse
+      POSTGRES_DB: synapse
+      POSTGRES_INITDB_ARGS: '--encoding=UTF-8 --lc-collate=C --lc-ctype=C'
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://100.82.224.98:3100/loki/api/v1/push"
+
+  synapse:
+    image: docker.io/matrixdotorg/synapse:latest
+    container_name: synapse
+    restart: unless-stopped
+    environment:
+      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml
+    volumes:
+      - ./synapse:/data
+    ports:
+      - "8008:8008/tcp"
+      - "9000:9000/tcp"
+    depends_on:
+      - postgres
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://100.82.224.98:3100/loki/api/v1/push"
+
+  rogue:
+    container_name: rogue
+    build: https://github.com/mdellavo/rogue.git
+    ports:
+      - 6543:6543
+
+#  matrix-hookshot:
+#    container_name: matrix-hookshot
+#    image: halfshot/matrix-hookshot:latest
+#    restart: unless-stopped
+#    ports:
+#      - "9993:9993"  # homeserver port
+#      - "9000:9000"  # webhook port
+#      - "9002:9002"  # metrics port
+#    volumes:
+#      - ./matrix-hookshot:/data
+#    depends_on:
+#      - synapse
+#    logging:
+#      driver: loki
+#      options:
+#        loki-url: "http://100.82.224.98:3100/loki/api/v1/push"
+
+volumes:
+  postgres-data:

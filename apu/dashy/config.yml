@@ -1,0 +1,41 @@
+pageInfo:
+  title: Home Lan
+appConfig:
+  statusCheck: true
+sections:
+- name: Services
+  items:
+  - title: UniFi
+    icon: hl-ubiquiti
+    url: https://apu.local:8443/
+    statusCheckAllowInsecure: true
+  - title: SabNZBd
+    icon: favicon-local
+    url: http://apu.local:8180/
+  - title: Radarr
+    icon: favicon-local
+    url: http://apu.local:7878/
+    statusCheckAcceptCodes: 401
+  - title: Sonarr
+    icon: favicon-local
+    url: http://apu.local:8989/
+    statusCheckAcceptCodes: 401
+  - title: Plex
+    icon: favicon-local
+    url: http://apu.local:32400/
+    statusCheckAcceptCodes: 401
+  - title: Synology
+    icon: hl-synology
+    url: http://synology.local
+  - title: Syncthing
+    icon: hl-syncthing
+    url: http://apu.local:8384/
+  - title: Prometheus
+    icon: favicon-local
+    url: http://apu.local:9090
+  - title: Grafana
+    icon: hl-grafana
+    url: http://apu.local:3000/
+  - title: Wyze Bridge
+    icon: https://www.wyze.com/cdn/shop/files/Dark_Green_W.png?crop=center&height=32&v=1700079450&width=32
+    url: http://apu.local:5000/

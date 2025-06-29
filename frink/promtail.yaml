@@ -1,0 +1,67 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://100.82.224.98:3100/loki/api/v1/push
+
+scrape_configs:
+- job_name: journal
+  journal:
+    json: false
+    max_age: 12h
+    path: /var/log/journal
+    labels:
+      job: systemd-journal
+      host: frink
+  relabel_configs:
+    - source_labels: ['__journal__systemd_unit']
+      target_label: 'unit'  
+  
+- job_name: system
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: varlogs
+      __path__: /var/log/*log
+      host: frink
+
+- job_name: letsencrypt
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: letsencrypt
+      __path__: /var/log/letsencrypt/*log
+      host: frink
+
+- job_name: inspircd
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: inspircd
+      __path__: /var/log/inspircd/*log
+      host: frink
+
+- job_name: synapse
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: synapse
+      __path__: /var/log/synapse/*log
+      host: frink
+
+- job_name: nginx
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: nginx
+      __path__: /var/log/nginx/*log
+      host: frink

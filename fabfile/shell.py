@@ -1,33 +1,41 @@
 import os
-from crypt import crypt
-from getpass import getpass
+from io import StringIO
 
-from fabric.api import task, put, run
-from fabric.contrib.files import append, exists, uncomment, contains, sed
-from fabric.operations import sudo
-from fabric.context_managers import settings
+from fabric.api import task, put
+from fabric.contrib.files import append
+from fabric.operations import sudo, run
 
-from .config import SHELL_STACK, HOMES_DEVICE, DB_DEVICE, DB_PATH, CONFIGS_PATH
+from .config import SHELL_STACK, CONFIGS_PATH
 from .aws import deploy_stack
-from .common import apt_install, change_hostname, add_repository, apt_update
 
-
-USER = "marc"
-SHELL_HOSTNAME = "snake.quuux.org"
-
-BASE_PACKAGES = [
-    "apt-transport-https",
-    "ca-certificates",
+PACKAGES = [
+    "man-db",
+    "logrotate",
+    "vim",
+    "sudo",
+    "bash-completion",
+    "tmux",
+    "ntp",
+    "wget",
     "curl",
     "emacs-nox",
-    "build-essential",
-    "python-pip",
-    "python-setuptools",
-    "python-dev",
+    "base-devel",
     "tmux",
     "git",
     "jq",
     "mailutils",
+    "nginx",
+    "certbot",
+    "certbot-nginx",
+    # "postfix",
+    "tailscale",
+    "openssl",
+    "bpytop",
+    "tree",
+    "strace",
+    "gdb",
+    "htop",
+    "dnsutils",
 ]
 
 MAIL_FORWARDS = [
@@ -38,8 +46,15 @@ MAIL_FORWARDS = [
 FORWARD_TO = "marc.dellavolpe+{domain}@gmail.com"
 
 CERTS = [
-    "knapsack-api.quuux.org",
+    "quuux.org",
     "snake.quuux.org",
+    "frink.quuux.org",
+    "atomic.quuux.org",
+    "homephone.quuux.org",
+    "liminal.quuux.org",
+    "rogue.quuux.org",
+    "rogue-api.quuux.org",
+    "p.ound.town",
 ]
 
 @task
@@ -47,64 +62,19 @@ def push_stack(name="shell"):
     deploy_stack(name, SHELL_STACK)
 
 
-def sysctl(setting):
-    if sudo("sysctl -w {0}".format(setting), warn_only=True).succeeded:
-        append("/etc/sysctl.conf", setting, use_sudo=True)
+@task
+def install_packages():
+    sudo("pacman -S " + " ".join(PACKAGES))
+
+@task
+def update_packages():
+    sudo("pacman -Sy archlinux-keyring && pacman -Syu")
 
 
 @task
-def update_system():
-    apt_update()
-    sudo("DEBIAN_FRONTEND=noninteractive apt-get -y upgrade")
-
-
-def setup_unattended_upgrades():
-    apt_install(["unattended-upgrades"])
-    sudo("DEBIAN_FRONTEND=noninteractive dpkg-reconfigure --priority=low unattended-upgrades")
-
-
-def install_ntp():
-    sysctl("xen.independent_wallclock=1")
-    apt_install(["ntp"])
-
-
-def install_apt():
-    apt_install(BASE_PACKAGES)
-
-
-def set_hostname():
-    change_hostname(SHELL_HOSTNAME)
-
-
-def add_user():
-    if not contains("/etc/passwd", USER):
-        password = getpass('Password for {}: '.format(USER))
-        crypted_password = crypt(password, 'salt')
-        sudo("useradd -m -G sudo -s /bin/bash -p {} {} ".format(crypted_password, USER))
-
-
-def copy_ssh_id():
-    if not exists("/home/{}/.ssh".format(USER)):
-        sudo("mkdir /home/{}/.ssh".format(USER), user=USER)
-        sudo("touch /home/{}/.ssh/authorized_keys".format(USER), user=USER)
-
-    with open(os.path.expanduser("~/.ssh/id_rsa.pub")) as f:
-        pub = f.read()
-    append("/home/{}/.ssh/authorized_keys".format(USER), pub, use_sudo=True)
-
-
-def setup_env():
-    uncomment("/home/{}/.bashrc".format(USER), '#force_color_prompt=yes', use_sudo=True)
-
-
-def install_certbot():
-    sudo("add-apt-repository ppa:certbot/certbot")
-    apt_update()
-    apt_install(["python-certbot-nginx"])
-
+def request_certs():
     for cert in CERTS:
-        sudo("certbot certonly --nginx -m marc.dellavolpe@gmail.com --agree-tos -d {}".format(cert))
-
+        sudo("certbot run --nginx -m marc.dellavolpe@gmail.com --agree-tos -d {}".format(cert))
 
 @task
 def update_certs():
@@ -112,24 +82,8 @@ def update_certs():
 
 
 @task
-def install_postfix():
-    apt_install(["postfix", "opendkim", "opendkim-tools"])
-
+def configure_postfix():
     sudo("echo quuux.org > /etc/mailname")
-
-    opendkim_conf_src = os.path.join(CONFIGS_PATH, "opendkim.conf")
-    put(opendkim_conf_src, "/etc/opendkim.conf", use_sudo=True)
-
-    run("opendkim-genkey -t -s mail -d quuux.org")
-    sudo("mv mail.private /etc/dkimkeys/mail.key.pem")
-    sudo("chown root:root /etc/dkimkeys/mail.key.pem")
-    sudo("chmod 0600 /etc/dkimkeys/mail.key.pem")
-    run("cat mail.txt")
-
-    append("/etc/default/opendkim", "SOCKET=\"inet:8891@localhost\"", use_sudo=True)
-    sudo("/lib/opendkim/opendkim.service.generate")
-    sudo("systemctl daemon-reload")
-    sudo("service opendkim restart")
 
     postfix_conf_src = os.path.join(CONFIGS_PATH, "postfix.conf")
     put(postfix_conf_src, "/etc/postfix/main.cf", use_sudo=True)
@@ -142,76 +96,271 @@ def install_postfix():
         append("/etc/postfix/virtual", forward_to, use_sudo=True)
 
     sudo("postmap /etc/postfix/virtual")
-    sudo("service postfix reload")
+    sudo("systemctl restart postfix")
 
 
-def initialize_ebs(device, mountpoint):
-    should_init = "ext4" not in sudo("file -s " + device)
-    if should_init:
-        sudo("mkfs -t ext4 " + device)
-    if not exists(mountpoint):
-        sudo("mkdir {}".format(mountpoint))
-    append("/etc/fstab", "{}\t{}\text4\tdefaults,nofail\t0\t2".format(device, mountpoint), use_sudo=True)
-    return should_init
+NGINX_HOSTED_SITE_CONFIG = """
+server {{
+    listen 443 ssl;
+
+    server_name {NAME};
+    root /var/www/{NAME};
+    index index.html;
+
+    ssl_certificate /etc/letsencrypt/live/{NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{NAME}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {{
+        try_files $uri $uri/ =404;
+    }}
+
+    {LOCATIONS}
+}}
+
+server {{
+    listen 80;
+    server_name {NAME};
+
+    if ($host = {NAME}) {{
+        return 301 https://$host$request_uri;
+    }}
+
+    return 404;
+}}
+"""
+
+NGINX_PROMETHEUS_METRICS_LOCATIONS = """
+    location /status {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/metrics-htpasswd;
+        stub_status;
+    }
+
+    location /metrics/node {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/metrics-htpasswd;
+        proxy_pass http://localhost:9100/metrics;
+    }
+
+    location /metrics/nginx {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/metrics-htpasswd;
+        proxy_pass http://localhost:4040/metrics;
+    }
+
+    location /metrics/synapse {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/metrics-htpasswd;
+        proxy_pass http://localhost:9000/_synapse/metrics;
+    }
+
+"""
+
+NGINX_SYNAPSE_LOCATIONS = """
+    listen 8448 ssl http2 default_server;
+    listen [::]:8448 ssl http2 default_server;
+
+    location /.well-known/matrix/server {
+        default_type application/json;
+        return 200 '{"m.server": "p.ound.town:443"}';
+	}
+
+    location /.well-known/matrix/client {
+		default_type application/json;
+        return 200 '{"m.homeserver":{"base_url": "https://p.ound.town"}}';
+	}
+
+    location ~ ^(/_matrix|/_synapse/client) {
+        # note: do not add a path (even a single /) after the port in `proxy_pass`,
+        # otherwise nginx will canonicalise the URI and cause signature verification
+        # errors.
+        proxy_pass http://localhost:8008;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+
+        # Nginx by default only allows file uploads up to 1M in size
+        # Increase client_max_body_size to match max_upload_size defined in homeserver.yaml
+        client_max_body_size 50M;
+    }
+"""
+
+NGINX_PROXY_PASS_NOAUTH_CONFIG = """
+server {{
+    listen 443 ssl;
+    server_name {NAME};
+
+    ssl_certificate /etc/letsencrypt/live/{NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{NAME}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {{
+        proxy_pass {TARGET};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_request_buffering off;
+    }}
+}}
+
+server {{
+    listen 80;
+    server_name {NAME};
+
+    if ($host = {NAME}) {{
+        return 301 https://$host$request_uri;
+    }}
+
+    return 404;
+}}
+"""
+
+
+NGINX_PROXY_PASS_SITE_CONFIG = """
+server {{
+    listen 443 ssl;
+    server_name {NAME};
+
+    ssl_certificate /etc/letsencrypt/live/{NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{NAME}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    auth_basic "Are you elite?";
+    auth_basic_user_file /etc/nginx/htpasswd;
+
+    location / {{
+        proxy_pass {TARGET};
+    }}
+}}
+
+server {{
+    listen 80;
+    server_name {NAME};
+
+    if ($host = {NAME}) {{
+        return 301 https://$host$request_uri;
+    }}
+
+    return 404;
+}}
+"""
+
+NGINX_S3_PROXY_SITE_CONFIG = """
+server {{
+    listen 443 ssl;
+    server_name {NAME};
+
+    ssl_certificate /etc/letsencrypt/live/{NAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{NAME}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {{
+      proxy_http_version     1.1;
+      proxy_set_header       Connection "";
+      proxy_set_header       Authorization '';
+      proxy_set_header       Host {BUCKET}.s3-website-us-east-1.amazonaws.com;
+      proxy_hide_header      x-amz-id-2;
+      proxy_hide_header      x-amz-request-id;
+      proxy_hide_header      x-amz-meta-server-side-encryption;
+      proxy_hide_header      x-amz-server-side-encryption;
+      proxy_hide_header      Set-Cookie;
+      proxy_ignore_headers   Set-Cookie;
+      proxy_cache_revalidate on;
+      proxy_intercept_errors on;
+      proxy_pass             http://{BUCKET}.s3-website-us-east-1.amazonaws.com;
+      proxy_cache            cache;
+      proxy_cache_valid      200 24h;
+      proxy_cache_valid      403 15m;
+      proxy_cache_use_stale  error timeout updating http_500 http_502 http_503 http_504;
+      proxy_cache_lock       on;
+      proxy_cache_bypass     $http_cache_purge;
+      add_header             Cache-Control max-age=31536000;
+      add_header             X-Cache-Status $upstream_cache_status;
+    }}
+}}
+
+server {{
+    listen 80;
+    server_name {NAME};
+
+    if ($host = {NAME}) {{
+        return 301 https://$host$request_uri;
+    }}
+
+    return 404;
+}}
+"""
+
+
+NGINX_INDEX_TEMPLATE = """
+<html>
+<head>
+    <title>{NAME}</title>
+</head>
+<body>
+    <h1>{NAME}</h1>
+</body>
+</html>
+"""
+
+
+NGINX_SITES = [
+    ("quuux.org", NGINX_HOSTED_SITE_CONFIG, True, {"LOCATIONS": ""}),
+    ("snake.quuux.org", NGINX_HOSTED_SITE_CONFIG, True, {"LOCATIONS": ""}),
+    ("p.ound.town", NGINX_HOSTED_SITE_CONFIG, True, {"LOCATIONS": NGINX_SYNAPSE_LOCATIONS}),
+    ("frink.quuux.org", NGINX_HOSTED_SITE_CONFIG, True, {"LOCATIONS": NGINX_PROMETHEUS_METRICS_LOCATIONS}),
+    ("homephone.quuux.org", NGINX_PROXY_PASS_SITE_CONFIG, False, {"TARGET": "https://100.116.90.114:8000"}),
+    ("atomic.quuux.org", NGINX_PROXY_PASS_SITE_CONFIG, False, {"TARGET": "http://100.80.129.57"}),
+    ("liminal.quuux.org", NGINX_S3_PROXY_SITE_CONFIG, False, {"BUCKET": "liminal.quuux.org"}),
+    ("rogue.quuux.org", NGINX_S3_PROXY_SITE_CONFIG, False, {"BUCKET": "rogue.quuux.org"}),
+    ("rogue-api.quuux.org", NGINX_PROXY_PASS_NOAUTH_CONFIG, False, {"TARGET": "http://100.106.82.43:6543"}),
+]
 
 
 @task
-def initialize_volumes():
-    initialize_ebs(HOMES_DEVICE, "/home")
-    initialize_ebs(DB_DEVICE, DB_PATH)
-    sudo("mount -a")
+def configure_nginx():
+    nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.conf")
+    put(nginx_conf_src, "/etc/nginx/nginx.conf", use_sudo=True)
+    sudo("mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled")
+
+    # sudo("sh -c \"echo -n 'user:' > /etc/nginx/htpasswd\"")
+    # sudo("sh -c \"openssl passwd -apr1 >> /etc/nginx/htpasswd\"")
+
+    for site, config_template, needs_dir, params in NGINX_SITES:
+
+        if needs_dir:
+            sudo(f"mkdir -p /var/www/{site}")
+
+            html = NGINX_INDEX_TEMPLATE.format(NAME=site)
+            put(StringIO(html), f"/var/www/{site}/index.html", use_sudo=True)
+
+        config = config_template.format(NAME=site, **params)
+        put(StringIO(config), f"/etc/nginx/sites-available/{site}", use_sudo=True)
+        sudo(f"ln -s -f /etc/nginx/sites-available/{site} /etc/nginx/sites-enabled/{site}")
+
+    sudo("systemctl restart nginx")
 
 
 @task
-def install_postgres():
-    sudo("wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -")
-    add_repository("deb http://apt.postgresql.org/pub/repos/apt/ bionic-pgdg main", "postgres")
-    apt_update()
-    apt_install(["postgresql", "postgresql-contrib"])
-    sudo("systemctl stop postgresql")
-
-    sed("/etc/postgresql/11/main/postgresql.conf", "/var/lib/postgresql/11/main", "/db/postgres/11/main", use_sudo=True)
-
-    sudo("systemctl start postgresql")
-    with settings(warn_only=True):
-        sudo("createuser -s -d -r {}".format(USER), user="postgres")
-
-
-@task
-def install_nginx():
-    sudo("add-apt-repository ppa:nginx/stable")
-    apt_update()
-    apt_install(["nginx"])
-
-    nginx_conf_src = os.path.join(CONFIGS_PATH, "nginx.snake.conf")
-    put(nginx_conf_src, "/etc/nginx/sites-available/default", use_sudo=True)
-
-    sudo("rm /var/www/html/index.nginx-debian.html")
-    sudo("touch /var/www/html/index.html")
-
-    sudo("systemctl start restart")
-
-
-@task
-def install_znc():
-    apt_install(["znc"])
+def install_inspircd():
+    run("git clone https://aur.archlinux.org/inspircd.git")
+    run("cd inspircd && makepkg -sic")
 
 
 @task
 def bootstrap():
-    initialize_volumes()
-    set_hostname()
-    update_system()
-    setup_unattended_upgrades()
-    install_apt()
-    install_ntp()
+    update_packages()
+    install_packages()
+    configure_nginx()
+    request_certs()
 
-    install_postfix()
-    install_znc()
-
-    install_postgres()
-    install_nginx()
-    install_certbot()
-
-    add_user()
-    copy_ssh_id()
+    install_inspircd()
+    # configure_postfix() TODO

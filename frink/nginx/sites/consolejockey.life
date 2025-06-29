@@ -1,0 +1,26 @@
+
+server {
+    listen 443 ssl;
+
+    server_name consolejockey.life;
+    root /var/www/consolejockey.life;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+
+
+}
+
+server {
+    listen 80;
+    server_name consolejockey.life;
+
+    if ($host = consolejockey.life) {
+        return 301 https://$host$request_uri;
+    }
+
+    return 404;
+}

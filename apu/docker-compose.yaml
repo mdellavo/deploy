@@ -1,0 +1,344 @@
+services:
+
+  gordy:
+    container_name: gordy
+    entrypoint: ["python3", "-m", "gordy", "--homeserver", "https://p.ound.town", "--user", "gordy"]
+    build: https://github.com/mdellavo/gordy.git
+    restart: unless-stopped
+    environment:
+      GORDY_PASSWORD: gordy
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://mojo.local:3100/loki/api/v1/push"
+
+  dashy:
+    image: lissy93/dashy
+    container_name: dashy
+    volumes:
+      - ./dashy/config.yml:/app/user-data/conf.yml
+    ports:
+      - 4000:8080
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'node', '/app/services/healthcheck']
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  mongo:
+    image: mongo:3.6
+    container_name: mongo
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    container_name: syncthing
+    hostname: syncthing #optional
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/Eastern
+    volumes:
+      - ./syncthing:/config
+      - /media/Sync:/data1
+    ports:
+      - 8384:8384
+      - 22000:22000/tcp
+      - 22000:22000/udp
+      - 21027:21027/udp
+    restart: unless-stopped
+
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - VERSION=docker
+      - PLEX_CLAIM= #optional
+    volumes:
+      - ./plex:/config
+      - /media/Downloads/TV:/tv
+      - /media/Downloads/Movies:/movies
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd
+    container_name: sabnzbd
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: US/Eastern
+    volumes:
+      - ./sabnzbd:/config
+      - ./sabnzbd/incomplete:/incomplete-downloads
+      - /media/Downloads:/downloads
+    ports:
+      - "8180:8080"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  unifi:
+    image: jacobalberty/unifi:latest
+    container_name: unifi
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    volumes:
+      - unifi:/unifi
+      - ./unifi-backup:/unifi/data/backup
+    user: unifi
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    environment:
+      TZ: US/Eastern
+      DB_URI: mongodb://mongo/unifi
+      STATDB_URI: mongodb://mongo/unifi_stat
+      DB_NAME: unifi
+    ports:
+      - "3478:3478/udp" # STUN
+      - "6789:6789/tcp" # Speed test
+      - "8080:8080/tcp" # Device/ controller comm.
+      - "8443:8443/tcp" # Controller GUI/API as seen in a web browser
+      - "8880:8880/tcp" # HTTP portal redirection
+      - "8843:8843/tcp" # HTTPS portal redirection
+      - "10001:10001/udp" # AP discovery
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana-oss
+    volumes:
+      - grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  loki:
+    container_name: loki
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    #command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8280:8080"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  unpoller:
+    container_name: unpoller
+    image: golift/unifi-poller:latest
+    restart: unless-stopped
+    # volumes:
+    #   - ./unpoller:/etc/unpoller
+    ports:
+      - "9130:9130"
+    depends_on:
+      - unifi
+    environment:
+      - UP_POLLER_DEBUG=false
+      - UP_UNIFI_DYNAMIC=false
+      - UP_UNIFI_DEFAULT_URL=https://apu.local:8443
+      - UP_UNIFI_DEFAULT_USER=unifipoller
+      - UP_UNIFI_DEFAULT_PASS=unifipoller
+      - UP_UNIFI_DEFAULT_SAVE_ALARMS=true
+      - UP_UNIFI_DEFAULT_SAVE_ANOMALIES=true
+      - UP_UNIFI_DEFAULT_SAVE_DPI=true
+      - UP_UNIFI_DEFAULT_SAVE_EVENTS=true
+      - UP_UNIFI_DEFAULT_SAVE_IDS=true
+      - UP_UNIFI_DEFAULT_SAVE_SITES=true
+      - UP_INFLUXDB_DISABLE=true
+      - UP_LOKI_URL=http://apu.local:3100
+      - UP_PROMETHEUS_HTTP_LISTEN=0.0.0.0:9130
+      - UP_PROMETHEUS_NAMESPACE=unifipoller
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  snmp_exporter:
+    container_name: snmp_exporter
+    image: prom/snmp-exporter
+    restart: unless-stopped
+    ports:
+      - 9116:9116
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/Eastern
+    volumes:
+      - ./radarr:/config
+      - /media/Downloads/Movies:/movies #optional
+      #- /path/to/downloadclient-downloads:/downloads #optional
+    ports:
+      - 7878:7878
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/Eastern
+    volumes:
+      - ./sonarr:/config
+      - /media/Downloads/TV:/tv #optional
+      #- /path/to/downloadclient-downloads:/downloads #optional
+    ports:
+      - 8989:8989
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+
+  prom-plex-exporter:
+    container_name: prom-plex-exporter
+    image: ghcr.io/jsclayton/prometheus-plex-exporter
+    ports:
+      - 9000:9000/tcp
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://apu:3100/loki/api/v1/push"
+    environment:
+      PLEX_SERVER: http://apu.local:32400/web/
+      PLEX_TOKEN: UPBvW_hsM43DCsmXxFSg
+
+  sonarr-exporter:
+    image: ghcr.io/onedr0p/exportarr
+    container_name: sonarr-exporter
+    command: ["sonarr"]
+    environment:
+      PORT: 9707
+      URL: http://sonarr:8989
+      APIKEY: 0612a85d2d7d47809c9f4848063d3ad5
+    ports:
+      - "9707:9707"
+    restart: unless-stopped
+
+  radarr-exporter:
+    image: ghcr.io/onedr0p/exportarr
+    container_name: radarr-exporter
+    command: ["radarr"]
+    environment:
+      PORT: 9708
+      URL: http://radarr:7878
+      APIKEY: 3eba7be4c18d42d98495788a0904fc34
+    ports:
+      - "9708:9708"
+    restart: unless-stopped
+
+  sabnzbd-exporter:
+    image: ghcr.io/onedr0p/exportarr
+    container_name: sabnzbd-exporter
+    command: ["sabnzbd"]
+    environment:
+      PORT: 9711
+      URL: http://apu.local:8180
+      APIKEY: f0082ecb65ce43debeee0161a27ce8f9
+    ports:
+     - "9711:9711"
+    restart: unless-stopped
+
+  wyze-bridge:
+    container_name: wyze-bridge
+    restart: unless-stopped
+    image: mrlt8/wyze-bridge:latest
+    ports:
+      - 1935:1935 # RTMP
+      - 8554:8554 # RTSP
+      - 8888:8888 # HLS
+      - 8889:8889 #WebRTC
+      - 8189:8189/udp # WebRTC/ICE
+      - 5000:5000 # WEB-UI
+    environment:
+        # [OPTIONAL] (Can be set in the WebUI):
+        #- WYZE_EMAIL=
+        #- WYZE_PASSWORD=
+        # [OPTIONAL] IP Address of the host to enable WebRTC e.g.,:
+        # - WB_IP=192.168.1.122
+        # [OPTIONAL] Wyze API credentials:
+        - API_ID=06e2811d-76ae-47a6-a210-436cfb5d901c
+        - API_KEY=kHKzJ66ohTT93yeG5lNBhhtp4QgRs0JhmSbG99CCYahQz8JJyiSLTu2lyJ9D
+
+volumes:
+  mongo-data:
+  mongo-config:
+  unifi:
+  grafana:
+  prometheus:
+  loki-data:

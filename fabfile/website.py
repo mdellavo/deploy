@@ -1,22 +1,27 @@
 import os
 import boto3
 import mimetypes
-from boto.s3.key import Key
 from fabric.api import local
 from fabric.decorators import task
 from fabfile.aws import deploy_stack
-from fabfile.config import GDAX_TRADER_HOST, SELF_HOST, WEBSITE_STACK
+from fabfile.config import WEBSITE_STACK
 
 
 SELF_STATIC_PATH = os.path.expanduser("~/Projects/marcdellavolpe.com")
 SELF_BUILD_PATH = SELF_STATIC_PATH + "/_site"
-GDAX_TRADER_STATIC_PATH = os.path.expanduser("~/Dropbox/Projects/GDAX/web/dist")
+
+FUCK_SWEENEY_STATIC_PATH = os.path.expanduser("~/Web/fucksweeney.com")
+FUCK_SWEENEY_BUILD_PATH = FUCK_SWEENEY_STATIC_PATH + "/_site"
+
+FUCK_NORCROSS_STATIC_PATH = os.path.expanduser("~/Web/fucknorcross.com")
+FUCK_NORCROSS_BUILD_PATH = FUCK_NORCROSS_STATIC_PATH + "/_site"
 
 
 def deploy_website(path, bucket_name):
     client = boto3.client('s3')
 
-    def upload(_, dirname, filenames):
+    for dirname, dirs, filenames in  os.walk(path):
+        print("wtf", dirname, filenames)
 
         exclude = [filename for filename in filenames if filename[0] == '.']
         for filename in exclude:
@@ -35,37 +40,51 @@ def deploy_website(path, bucket_name):
                 client.put_object(
                     Bucket=bucket_name,
                     Key=remote_path,
-                    Body=contents,
+                    Body=contents.read(),
                     ACL="public-read",
                     ContentType=mimetype or "binary/octet",
                 )
-
-    os.path.walk(path, upload, None)
-
 
 @task
 def deploy_website_stack():
     deploy_stack('website', WEBSITE_STACK)
 
 
+def _build_jekyll(static_path):
+    local("jekyll build -s " + static_path + " -d " + static_path + "/_site")
+
+
 @task
 def deploy_website_self():
-    local("jekyll build -s " + SELF_STATIC_PATH + " -d " + SELF_BUILD_PATH)
-    deploy_website(SELF_BUILD_PATH, SELF_HOST)
-
-
-@task
-def deploy_website_gdax_trader():
-    deploy_website(GDAX_TRADER_STATIC_PATH, GDAX_TRADER_HOST)
+    _build_jekyll(SELF_STATIC_PATH)
+    deploy_website(SELF_BUILD_PATH, "marcdellavolpe.com")
 
 
 ALL = [
     deploy_website_self,
-    deploy_website_gdax_trader,
 ]
-
 
 @task
 def deploy_websites():
     for deploy_site in ALL:
         deploy_site()
+
+@task
+def deploy_fuckem_both():
+    _build_jekyll(FUCK_SWEENEY_STATIC_PATH)
+    deploy_website(FUCK_SWEENEY_BUILD_PATH, "fucksweeney.com")
+    _build_jekyll(FUCK_NORCROSS_STATIC_PATH)
+    deploy_website(FUCK_NORCROSS_BUILD_PATH, "fucknorcross.com")
+
+
+SAVE_AMERICA_DOMAINS = [
+    "saveamericaagain.info",
+    "saveamericagain.us",
+    "saveamericaga.in",
+    "saveamericagain.com"
+]
+
+
+@task
+def deploy_save_america():
+    pass

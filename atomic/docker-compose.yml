@@ -1,0 +1,39 @@
+services:
+
+
+  dashy:
+    image: lissy93/dashy
+    container_name: dashy
+    volumes:
+       - ./dashy/config.yml:/app/user-data/conf.yml
+    ports:
+      - 4000:8080
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'node', '/app/services/healthcheck']
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://mojo:3100/loki/api/v1/push"
+
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8280:8080"
+    restart: unless-stopped
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://mojo.local:3100/loki/api/v1/push"

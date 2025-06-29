@@ -1,2 +1,2 @@
 boto3
-fabric==1.14.1
+fabric3

@@ -1,0 +1,28 @@
+
+server {
+    listen 443 ssl;
+    server_name atomic.quuux.org;
+
+    ssl_certificate /etc/letsencrypt/live/atomic.quuux.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/atomic.quuux.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    auth_basic "Are you elite?";
+    auth_basic_user_file /etc/nginx/htpasswd;
+
+    location / {
+        proxy_pass http://100.80.129.57;
+    }
+}
+
+server {
+    listen 80;
+    server_name atomic.quuux.org;
+
+    if ($host = atomic.quuux.org) {
+        return 301 https://$host$request_uri;
+    }
+
+    return 404;
+}

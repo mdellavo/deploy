@@ -1,0 +1,71 @@
+<!doctype html>
+<html class="no-js" lang="">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title>p.ound.town</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+
+         body {
+             text-align: center;
+             font-size: 48px;
+             background: black;
+             color: white;
+             font-family: cursive;
+         }
+
+
+         #door {
+             font-size: 72px;
+             text-decoration: none;
+         }
+
+         @keyframes flicker1 {
+             0% {
+                 opacity: .5;
+             }
+
+             50% {
+                 opacity: 1;
+             }
+
+             100% {
+                 opacity: .5;
+             }
+         }
+
+         @keyframes flicker2 {
+             0% {
+                 opacity: 1;
+             }
+
+             50% {
+                 opacity: .5;
+             }
+
+             100% {
+                 opacity: 1;
+             }
+         }
+
+         #fire1 {
+             animation: flicker1 5s infinite;
+         }
+
+         #fire2 {
+             animation: flicker2 5.5s infinite;
+         }
+
+        </style>
+    </head>
+    <body>
+        <h1>p.ound.town</h1>
+        <p>
+            <span id="fire1" class="fire">&#x1F525;</span>
+            <a href="https://matrix.to/#/#lobby:p.ound.town" id="door">&#x1F6AA;</a>
+            <span id="fire2" class="fire">&#x1F525;</span>
+        </p>
+
+    </body>
+</html>

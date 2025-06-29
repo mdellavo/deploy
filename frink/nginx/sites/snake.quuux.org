@@ -1,0 +1,30 @@
+
+server {
+    listen 443 ssl;
+
+    server_name snake.quuux.org;
+    root /var/www/snake.quuux.org;
+    index index.html;
+
+    ssl_certificate /etc/letsencrypt/live/snake.quuux.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/snake.quuux.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    
+}
+
+server {
+    listen 80;
+    server_name snake.quuux.org;
+
+    if ($host = snake.quuux.org) {
+        return 301 https://$host$request_uri;
+    }
+
+    return 404;
+}

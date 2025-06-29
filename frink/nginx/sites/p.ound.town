@@ -1,0 +1,57 @@
+
+server {
+    listen 443 ssl;
+
+    server_name p.ound.town;
+    root /var/www/p.ound.town;
+    index index.html;
+
+    ssl_certificate /etc/letsencrypt/live/p.ound.town/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/p.ound.town/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    
+    listen 8448 ssl http2 default_server;
+    listen [::]:8448 ssl http2 default_server;
+
+    location /.well-known/matrix/server {
+        default_type application/json;
+        return 200 '{"m.server": "p.ound.town:443"}';
+	}
+
+    location /.well-known/matrix/client {
+		default_type application/json;
+        return 200 '{"m.homeserver":{"base_url": "https://p.ound.town"}}';
+	}
+
+    location ~ ^(/_matrix|/_synapse/client) {
+        # note: do not add a path (even a single /) after the port in `proxy_pass`,
+        # otherwise nginx will canonicalise the URI and cause signature verification
+        # errors.
+        proxy_pass http://localhost:8008;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+
+        # Nginx by default only allows file uploads up to 1M in size
+        # Increase client_max_body_size to match max_upload_size defined in homeserver.yaml
+        client_max_body_size 50M;
+    }
+
+}
+
+server {
+    listen 80;
+    server_name p.ound.town;
+
+    if ($host = p.ound.town) {
+        return 301 https://$host$request_uri;
+    }
+
+    return 404;
+}

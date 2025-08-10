@@ -36,6 +36,20 @@ resource "aws_subnet" "subnet" {
   ipv6_native                                    = "false"
   map_public_ip_on_launch                        = "false"
   private_dns_hostname_type_on_launch            = "ip-name"
+  availability_zone                              = var.AWS_AZ
+  vpc_id                                         = aws_vpc.main.id
+}
+
+resource "aws_subnet" "db_subnet" {
+  assign_ipv6_address_on_creation                = "false"
+  cidr_block                                     = "10.0.1.0/24"
+  enable_dns64                                   = "false"
+  enable_resource_name_dns_a_record_on_launch    = "false"
+  enable_resource_name_dns_aaaa_record_on_launch = "false"
+  ipv6_native                                    = "false"
+  map_public_ip_on_launch                        = "false"
+  private_dns_hostname_type_on_launch            = "ip-name"
+  availability_zone                              = "us-east-1a"
   vpc_id                                         = aws_vpc.main.id
 }
 
@@ -177,6 +191,14 @@ resource "aws_security_group" "frink-sg" {
     protocol    = "tcp"
     self        = "false"
     to_port     = "993"
+  }
+
+  ingress {
+    cidr_blocks = ["10.0.0.0/16"]
+    from_port   = "5432"
+    protocol    = "tcp"
+    self        = "false"
+    to_port     = "5432"
   }
 
   name   = "shell-InstanceSecurityGroup-12UQCNCVQ1481"
@@ -325,8 +347,8 @@ resource "aws_network_acl" "acl-2" {
   vpc_id = aws_vpc.main.id
 }
 
-resource "aws_instance" "frink" {
-  ami                         = "ami-0857dde146952200b"
+resource "aws_instance" "ralph" {
+  ami                         = "ami-0bcb08446fd149731"
   associate_public_ip_address = "true"
   availability_zone           = var.AWS_AZ
 
@@ -335,7 +357,7 @@ resource "aws_instance" "frink" {
   }
 
   cpu_core_count       = "1"
-  cpu_threads_per_core = "2"
+  cpu_threads_per_core = "1"
 
   credit_specification {
     cpu_credits = "unlimited"
@@ -351,7 +373,7 @@ resource "aws_instance" "frink" {
   get_password_data                    = "false"
   hibernation                          = "false"
   instance_initiated_shutdown_behavior = "stop"
-  instance_type                        = "t3.small"
+  instance_type                        = "t4g.small"
   ipv6_address_count                   = "0"
   key_name                             = "marc new"
 
@@ -363,7 +385,7 @@ resource "aws_instance" "frink" {
   }
 
   monitoring = "false"
-  private_ip = "10.0.0.21"
+  private_ip = "10.0.0.22"
 
   root_block_device {
     delete_on_termination = "true"
@@ -376,11 +398,11 @@ resource "aws_instance" "frink" {
   subnet_id         = aws_subnet.subnet.id
 
   tags = {
-    Name = "Host"
+    Name = "Ralph"
   }
 
   tags_all = {
-    Name = "Host"
+    Name = "Ralph"
   }
 
   tenancy                = "default"
@@ -389,27 +411,44 @@ resource "aws_instance" "frink" {
   ]
 }
 
-resource "aws_network_interface" "net-iface-1" {
-  attachment {
-    device_index = "0"
-    instance     = aws_instance.frink.id
-  }
-
-  ipv4_prefix_count  = "0"
-  ipv6_address_count = "0"
-  ipv6_prefix_count  = "0"
-  private_ip         = "10.0.0.21"
-  security_groups    = [aws_security_group.frink-sg.id]
-  source_dest_check  = "true"
-  subnet_id          = aws_subnet.subnet.id
-}
-
-resource "aws_eip" "ip-1" {
-  instance             = aws_instance.frink.id
+resource "aws_eip" "ip-ralph" {
+  instance             = aws_instance.ralph.id
   network_border_group = var.AWS_REGION
-  network_interface    = aws_network_interface.net-iface-1.id
   public_ipv4_pool     = "amazon"
   vpc                  = "true"
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = "main"
+  subnet_ids = [aws_subnet.subnet.id, aws_subnet.db_subnet.id]
+
+  tags = {
+    Name = "Main DB subnet group"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  allocated_storage           = 20
+  storage_type               = "gp2"
+  engine                     = "postgres"
+  engine_version             = "17.5"
+  instance_class             = "db.t4g.micro"
+  identifier                 = "postgres"
+  username                   = "postgres"
+  password                   = "postgrespassword"
+  availability_zone          = var.AWS_AZ
+  db_subnet_group_name       = aws_db_subnet_group.main.name
+  vpc_security_group_ids     = [aws_security_group.frink-sg.id]
+  backup_retention_period    = 0
+  multi_az                   = false
+  publicly_accessible        = false
+  storage_encrypted          = false
+  skip_final_snapshot        = true
+  deletion_protection        = false
+
+  tags = {
+    Name = "PostgreSQL Database"
+  }
 }
 
 # S3 Buckets
@@ -429,7 +468,7 @@ resource "aws_route53_record" "dns-marcdellavolpe-com-a" {
   name    = "marcdellavolpe.com"
   type    = "A"
   ttl     = "60"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   zone_id = aws_route53_zone.zone-marcdellavolpe-com.zone_id
 }
 
@@ -468,9 +507,9 @@ resource "aws_route53_record" "dns-quuux-org-mx" {
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
 }
 
-resource "aws_route53_record" "dns-frink-quuux-org-a" {
-  name    = "frink.quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+resource "aws_route53_record" "dns-ralph-quuux-org-a" {
+  name    = "ralph.quuux.org"
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -478,7 +517,7 @@ resource "aws_route53_record" "dns-frink-quuux-org-a" {
 
 resource "aws_route53_record" "dns-mail-quuux-org-a" {
   name    = "mail.quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -486,7 +525,7 @@ resource "aws_route53_record" "dns-mail-quuux-org-a" {
 
 resource "aws_route53_record" "dns-liminal-quuux-org-a" {
   name    = "liminal.quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -494,7 +533,7 @@ resource "aws_route53_record" "dns-liminal-quuux-org-a" {
 
 resource "aws_route53_record" "dns-quuux-org-a" {
   name    = "quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -510,7 +549,7 @@ resource "aws_route53_record" "dns-quuux-org-txt" {
 
 resource "aws_route53_record" "dns-rogue-quuux-org-a" {
   name    = "rogue.quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -518,7 +557,7 @@ resource "aws_route53_record" "dns-rogue-quuux-org-a" {
 
 resource "aws_route53_record" "dns-rogue-api-quuux-org-a" {
   name    = "rogue-api.quuux.org"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -537,14 +576,6 @@ resource "aws_route53_record" "dns-mojo-ts-quuux-org-a" {
 resource "aws_route53_record" "dns-atomic-ts-quuux-org-a" {
   name    = "atomic.ts.quuux.org"
   records = ["100.89.171.89"]
-  ttl     = "60"
-  type    = "A"
-  zone_id = aws_route53_zone.zone-quuux-org.zone_id
-}
-
-resource "aws_route53_record" "dns-frink-ts-quuux-org-a" {
-  name    = "frink.ts.quuux.org"
-  records = ["100.91.178.85"]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
@@ -601,7 +632,7 @@ resource "aws_route53_zone" "zone-ound-town" {
 
 resource "aws_route53_record" "dns-p-ound-town-a" {
   name    = "p.ound.town"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-ound-town.zone_id
@@ -617,7 +648,7 @@ resource "aws_route53_record" "dns-consolejockey-life-a" {
   name    = "consolejockey.life"
   type    = "A"
   ttl     = "60"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   zone_id = aws_route53_zone.zone-consolejockey-life.zone_id
 }
 
@@ -631,7 +662,7 @@ resource "aws_route53_record" "dns-terminaljunkie-lol-a" {
   name    = "terminaljunkie.lol"
   type    = "A"
   ttl     = "60"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   zone_id = aws_route53_zone.zone-terminaljunkie-lol.zone_id
 }
 
@@ -645,7 +676,7 @@ resource "aws_route53_record" "dns-fucknorcross-com-a" {
   name    = "fucknorcross.com"
   type    = "A"
   ttl     = "60"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   zone_id = aws_route53_zone.zone-fucknorcross-com.zone_id
 }
 
@@ -657,7 +688,7 @@ resource "aws_route53_record" "dns-fucksweeney-com-a" {
   name    = "fucksweeney.com"
   type    = "A"
   ttl     = "60"
-  records = [aws_eip.ip-1.public_ip]
+  records = [aws_eip.ip-ralph.public_ip]
   zone_id = aws_route53_zone.zone-fucksweeney-com.zone_id
 }
 

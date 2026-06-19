@@ -1,0 +1,403 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+debconf_selections: 'postfix postfix/main_mailer_type select Internet Site
+
+  postfix postfix/mailname string quuux.org
+
+  '
+packages:
+- man-db
+- logrotate
+- vim
+- sudo
+- bash-completion
+- tmux
+- ntp
+- wget
+- curl
+- emacs-nox
+- build-essential
+- git
+- jq
+- mailutils
+- nginx
+- certbot
+- python3-certbot-nginx
+- postfix
+- dovecot-core
+- dovecot-imapd
+- dovecot-pop3d
+- dovecot-lmtpd
+- inspircd
+- openssl
+- bpytop
+- tree
+- strace
+- gdb
+- htop
+- dnsutils
+runcmd:
+- apt-get install -y ca-certificates curl gnupg
+- install -m 0755 -d /etc/apt/keyrings
+- curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+- chmod a+r /etc/apt/keyrings/docker.gpg
+- echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg]
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+- apt-get update
+- apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+- curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/$(lsb_release -cs).gpg | gpg
+  --dearmor -o /etc/apt/keyrings/tailscale.gpg
+- echo "deb [signed-by=/etc/apt/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu
+  $(lsb_release -cs) main" > /etc/apt/sources.list.d/tailscale.list
+- apt-get update
+- apt-get install -y tailscale
+- systemctl enable --now docker
+- docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+- rm -f /etc/nginx/sites-enabled/default
+- mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
+- mkdir -p /var/www/quuux.org /var/www/p.ound.town
+- chown -R www-data:www-data /var/www
+- ln -sf /etc/nginx/sites-available/quuux.org /etc/nginx/sites-enabled/quuux.org
+- ln -sf /etc/nginx/sites-available/p.ound.town /etc/nginx/sites-enabled/p.ound.town
+- ln -sf /etc/nginx/sites-available/liminal.quuux.org /etc/nginx/sites-enabled/liminal.quuux.org
+- ln -sf /etc/nginx/sites-available/rogue.quuux.org /etc/nginx/sites-enabled/rogue.quuux.org
+- ln -sf /etc/nginx/sites-available/rogue-api.quuux.org /etc/nginx/sites-enabled/rogue-api.quuux.org
+- systemctl enable nginx
+- echo "quuux.org" > /etc/mailname
+- postmap /etc/postfix/virtual
+- newaliases
+- systemctl enable postfix
+- systemctl enable --now dovecot
+- systemctl enable --now inspircd
+- systemctl enable --now tailscaled
+- systemctl enable --now ntp
+- mkdir -p /opt/frink/synapse
+- cd /opt/frink && docker compose up -d
+write_files:
+- path: /etc/nginx/nginx.conf
+  owner: root:root
+  permissions: '0644'
+  content: "user www-data;\nworker_processes auto;\nworker_cpu_affinity auto;\n\n\
+    events {\n    multi_accept on;\n    worker_connections 1024;\n}\n\nhttp {\n  \
+    \  charset utf-8;\n    sendfile on;\n    tcp_nopush on;\n    tcp_nodelay on;\n\
+    \    server_tokens off;\n    types_hash_max_size 4096;\n    client_max_body_size\
+    \ 16M;\n    gzip on;\n\n    proxy_cache_path /tmp/nginx/ levels=1:2 keys_zone=cache:10m\
+    \ max_size=500m inactive=60m use_temp_path=off;\n\n    include mime.types;\n \
+    \   default_type application/octet-stream;\n\n    log_format combined_upstream\
+    \ '$remote_addr - $remote_user [$time_local] \"$host\" \"$request\" $status $body_bytes_sent\
+    \ \"$http_referer\" \"$http_user_agent\" rt=$request_time uct=\"$upstream_connect_time\"\
+    \ uht=\"$upstream_header_time\" urt=\"$upstream_response_time\"';\n\n    access_log\
+    \ /var/log/nginx/access.log combined_upstream;\n    error_log /var/log/nginx/error.log\
+    \ warn;\n\n    include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;\n\
+    }\n"
+- path: /etc/nginx/sites-available/quuux.org
+  owner: root:root
+  permissions: '0644'
+  content: "server {\n    listen 443 ssl;\n    server_name quuux.org;\n    root /var/www/quuux.org;\n\
+    \    index index.html;\n\n    ssl_certificate /etc/letsencrypt/live/quuux.org/fullchain.pem;\n\
+    \    ssl_certificate_key /etc/letsencrypt/live/quuux.org/privkey.pem;\n    include\
+    \ /etc/letsencrypt/options-ssl-nginx.conf;\n    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\
+    \n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n\nserver {\n\
+    \    listen 80;\n    server_name quuux.org;\n\n    if ($host = quuux.org) {\n\
+    \        return 301 https://$host$request_uri;\n    }\n\n    return 404;\n}\n"
+- path: /etc/nginx/sites-available/p.ound.town
+  owner: root:root
+  permissions: '0644'
+  content: "server {\n    listen 443 ssl;\n    listen 8448 ssl http2 default_server;\n\
+    \    listen [::]:8448 ssl http2 default_server;\n    server_name p.ound.town;\n\
+    \    root /var/www/p.ound.town;\n    index index.html;\n\n    ssl_certificate\
+    \ /etc/letsencrypt/live/p.ound.town/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/p.ound.town/privkey.pem;\n\
+    \    include /etc/letsencrypt/options-ssl-nginx.conf;\n    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\
+    \n    location /.well-known/matrix/server {\n        default_type application/json;\n\
+    \        return 200 '{\"m.server\": \"p.ound.town:443\"}';\n    }\n\n    location\
+    \ /.well-known/matrix/client {\n        default_type application/json;\n     \
+    \   return 200 '{\"m.homeserver\":{\"base_url\": \"https://p.ound.town\"}}';\n\
+    \    }\n\n    location ~ ^(/_matrix|/_synapse/client) {\n        proxy_pass http://localhost:8008;\n\
+    \        proxy_set_header X-Forwarded-For $remote_addr;\n        proxy_set_header\
+    \ X-Forwarded-Proto $scheme;\n        proxy_set_header Host $host;\n        client_max_body_size\
+    \ 50M;\n    }\n\n    location / {\n        try_files $uri $uri/ =404;\n    }\n\
+    }\n\nserver {\n    listen 80;\n    server_name p.ound.town;\n\n    if ($host =\
+    \ p.ound.town) {\n        return 301 https://$host$request_uri;\n    }\n\n   \
+    \ return 404;\n}\n"
+- path: /etc/nginx/sites-available/liminal.quuux.org
+  owner: root:root
+  permissions: '0644'
+  content: "server {\n    listen 443 ssl;\n    server_name liminal.quuux.org;\n\n\
+    \    ssl_certificate /etc/letsencrypt/live/liminal.quuux.org/fullchain.pem;\n\
+    \    ssl_certificate_key /etc/letsencrypt/live/liminal.quuux.org/privkey.pem;\n\
+    \    include /etc/letsencrypt/options-ssl-nginx.conf;\n    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\
+    \n    location / {\n        proxy_http_version     1.1;\n        proxy_set_header\
+    \       Connection \"\";\n        proxy_set_header       Authorization '';\n \
+    \       proxy_set_header       Host liminal.quuux.org.s3-website-us-east-1.amazonaws.com;\n\
+    \        proxy_hide_header      x-amz-id-2;\n        proxy_hide_header      x-amz-request-id;\n\
+    \        proxy_hide_header      x-amz-meta-server-side-encryption;\n        proxy_hide_header\
+    \      x-amz-server-side-encryption;\n        proxy_hide_header      Set-Cookie;\n\
+    \        proxy_ignore_headers   Set-Cookie;\n        proxy_cache_revalidate on;\n\
+    \        proxy_intercept_errors on;\n        proxy_pass             http://liminal.quuux.org.s3-website-us-east-1.amazonaws.com;\n\
+    \        proxy_cache            cache;\n        proxy_cache_valid      200 24h;\n\
+    \        proxy_cache_valid      403 15m;\n        proxy_cache_use_stale  error\
+    \ timeout updating http_500 http_502 http_503 http_504;\n        proxy_cache_lock\
+    \       on;\n        proxy_cache_bypass     $http_cache_purge;\n        add_header\
+    \             Cache-Control max-age=31536000;\n        add_header            \
+    \ X-Cache-Status $upstream_cache_status;\n    }\n}\n\nserver {\n    listen 80;\n\
+    \    server_name liminal.quuux.org;\n\n    if ($host = liminal.quuux.org) {\n\
+    \        return 301 https://$host$request_uri;\n    }\n\n    return 404;\n}\n"
+- path: /etc/nginx/sites-available/rogue.quuux.org
+  owner: root:root
+  permissions: '0644'
+  content: "server {\n    listen 443 ssl;\n    server_name rogue.quuux.org;\n\n  \
+    \  ssl_certificate /etc/letsencrypt/live/rogue.quuux.org/fullchain.pem;\n    ssl_certificate_key\
+    \ /etc/letsencrypt/live/rogue.quuux.org/privkey.pem;\n    include /etc/letsencrypt/options-ssl-nginx.conf;\n\
+    \    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\n    location / {\n    \
+    \    proxy_http_version     1.1;\n        proxy_set_header       Connection \"\
+    \";\n        proxy_set_header       Authorization '';\n        proxy_set_header\
+    \       Host rogue.quuux.org.s3-website-us-east-1.amazonaws.com;\n        proxy_hide_header\
+    \      x-amz-id-2;\n        proxy_hide_header      x-amz-request-id;\n       \
+    \ proxy_hide_header      x-amz-meta-server-side-encryption;\n        proxy_hide_header\
+    \      x-amz-server-side-encryption;\n        proxy_hide_header      Set-Cookie;\n\
+    \        proxy_ignore_headers   Set-Cookie;\n        proxy_cache_revalidate on;\n\
+    \        proxy_intercept_errors on;\n        proxy_pass             http://rogue.quuux.org.s3-website-us-east-1.amazonaws.com;\n\
+    \        proxy_cache            cache;\n        proxy_cache_valid      200 24h;\n\
+    \        proxy_cache_valid      403 15m;\n        proxy_cache_use_stale  error\
+    \ timeout updating http_500 http_502 http_503 http_504;\n        proxy_cache_lock\
+    \       on;\n        proxy_cache_bypass     $http_cache_purge;\n        add_header\
+    \             Cache-Control max-age=31536000;\n        add_header            \
+    \ X-Cache-Status $upstream_cache_status;\n    }\n}\n\nserver {\n    listen 80;\n\
+    \    server_name rogue.quuux.org;\n\n    if ($host = rogue.quuux.org) {\n    \
+    \    return 301 https://$host$request_uri;\n    }\n\n    return 404;\n}\n"
+- path: /etc/nginx/sites-available/rogue-api.quuux.org
+  owner: root:root
+  permissions: '0644'
+  content: "server {\n    listen 443 ssl;\n    server_name rogue-api.quuux.org;\n\n\
+    \    ssl_certificate /etc/letsencrypt/live/rogue-api.quuux.org/fullchain.pem;\n\
+    \    ssl_certificate_key /etc/letsencrypt/live/rogue-api.quuux.org/privkey.pem;\n\
+    \    include /etc/letsencrypt/options-ssl-nginx.conf;\n    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;\n\
+    \n    location / {\n        proxy_pass http://100.106.82.43:6543;\n        proxy_set_header\
+    \ Host $host;\n        proxy_set_header X-Forwarded-For $remote_addr;\n      \
+    \  proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n\
+    \        proxy_set_header Connection \"upgrade\";\n        proxy_buffering off;\n\
+    \        proxy_request_buffering off;\n    }\n}\n\nserver {\n    listen 80;\n\
+    \    server_name rogue-api.quuux.org;\n\n    if ($host = rogue-api.quuux.org)\
+    \ {\n        return 301 https://$host$request_uri;\n    }\n\n    return 404;\n\
+    }\n"
+- path: /etc/postfix/main.cf
+  owner: root:root
+  permissions: '0644'
+  content: 'smtpd_banner = $myhostname ESMTP
+
+    biff = no
+
+    append_dot_mydomain = no
+
+    readme_directory = no
+
+
+    smtpd_tls_cert_file = /etc/letsencrypt/live/quuux.org/fullchain.pem
+
+    smtpd_tls_key_file = /etc/letsencrypt/live/quuux.org/privkey.pem
+
+    smtpd_use_tls = yes
+
+    smtpd_tls_session_cache_database = btree:${data_directory}/smtpd_scache
+
+    smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+    smtpd_tls_loglevel = 1
+
+    smtpd_tls_security_level = may
+
+    smtp_tls_security_level = may
+
+
+    smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+
+
+    # SASL auth via Dovecot
+
+    smtpd_sasl_type = dovecot
+
+    smtpd_sasl_path = private/auth
+
+    smtpd_sasl_auth_enable = yes
+
+
+    myhostname = quuux.org
+
+    alias_maps = hash:/etc/aliases
+
+    alias_database = hash:/etc/aliases
+
+    myorigin = quuux.org
+
+    mydomain = quuux.org
+
+    mydestination = $myhostname, quuux.org, localhost.quuux.org, localhost
+
+    relayhost =
+
+    mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+
+    mailbox_size_limit = 0
+
+    recipient_delimiter = +
+
+    inet_interfaces = all
+
+    inet_protocols = all
+
+
+    # Virtual domain forwarding
+
+    virtual_alias_domains = quuux.org marcdellavolpe.com
+
+    virtual_alias_maps = hash:/etc/postfix/virtual
+
+
+    # Local delivery via Dovecot LMTP
+
+    mailbox_transport = lmtp:unix:private/dovecot-lmtp
+
+    '
+- path: /etc/postfix/virtual
+  owner: root:root
+  permissions: '0644'
+  content: '@quuux.org marc.dellavolpe+quuux.org@gmail.com
+
+    @marcdellavolpe.com marc.dellavolpe+marcdellavolpe.com@gmail.com
+
+    '
+- path: /etc/aliases
+  owner: root:root
+  permissions: '0644'
+  content: 'root: marc.dellavolpe+root@gmail.com
+
+    '
+- path: /etc/dovecot/dovecot.conf
+  owner: root:root
+  permissions: '0644'
+  content: "protocols = imap pop3 lmtp\nlisten = *, ::\n\nssl = required\nssl_cert\
+    \ = </etc/letsencrypt/live/quuux.org/fullchain.pem\nssl_key = </etc/letsencrypt/live/quuux.org/privkey.pem\n\
+    ssl_min_protocol = TLSv1.2\n\nmail_location = maildir:~/Maildir\nmail_privileged_group\
+    \ = mail\n\nauth_mechanisms = plain login\n\npassdb {\n  driver = pam\n}\n\nuserdb\
+    \ {\n  driver = passwd\n}\n\nservice lmtp {\n  unix_listener /var/spool/postfix/private/dovecot-lmtp\
+    \ {\n    mode = 0600\n    user = postfix\n    group = postfix\n  }\n}\n\nservice\
+    \ auth {\n  unix_listener /var/spool/postfix/private/auth {\n    mode = 0666\n\
+    \    user = postfix\n    group = postfix\n  }\n  unix_listener auth-userdb {\n\
+    \    mode = 0600\n  }\n}\n\nservice imap-login {\n  inet_listener imap {\n   \
+    \ port = 143\n  }\n  inet_listener imaps {\n    port = 993\n    ssl = yes\n  }\n\
+    }\n\nservice pop3-login {\n  inet_listener pop3 {\n    port = 110\n  }\n  inet_listener\
+    \ pop3s {\n    port = 995\n    ssl = yes\n  }\n}\n"
+- path: /etc/inspircd/inspircd.conf
+  owner: inspircd:inspircd
+  permissions: '0640'
+  content: "<config format=\"xml\">\n\n<server name=\"quuux.org\"\n        description=\"\
+    quuux IRC\"\n        network=\"quuux\"\n        id=\"1AA\">\n\n<admin name=\"\
+    marc\"\n       nick=\"marc\"\n       email=\"marc.dellavolpe@gmail.com\">\n\n\
+    <bind address=\"\" port=\"6667\" type=\"clients\">\n<bind address=\"\" port=\"\
+    9999\" type=\"clients\" ssl=\"openssl\">\n<bind address=\"\" port=\"7777\" type=\"\
+    servers\">\n\n<openssl certfile=\"/etc/letsencrypt/live/quuux.org/fullchain.pem\"\
+    \n         keyfile=\"/etc/letsencrypt/live/quuux.org/privkey.pem\"\n         dhfile=\"\
+    /etc/inspircd/dhparams.pem\"\n         hash=\"sha256\">\n\n<connect allow=\"*\"\
+    \n         timeout=\"60\"\n         pingfreq=\"120\"\n         hardsendq=\"1M\"\
+    \n         softsendq=\"8192\"\n         recvq=\"8192\"\n         maxchans=\"30\"\
+    >\n\n<cidr ipv4clone=\"32\" ipv6clone=\"128\">\n\n<options prefixquit=\"Quit:\
+    \ \"\n         suffixquit=\"\"\n         prefixpart=\"&quot;\"\n         suffixpart=\"\
+    &quot;\"\n         fixedquit=\"\"\n         fixedpart=\"\"\n         syntaxhints=\"\
+    yes\"\n         cyclehosts=\"yes\"\n         cyclehostsfromuser=\"no\"\n     \
+    \    ircumsgprefix=\"no\"\n         announcets=\"yes\"\n         allowmismatch=\"\
+    no\"\n         defaultbind=\"auto\"\n         hostintopic=\"yes\"\n         pingwarning=\"\
+    15\"\n         serverpingfreq=\"60\"\n         defaultmodes=\"nt\"\n         moronbanner=\"\
+    You're banned!\"\n         exemptchanops=\"\"\n         invitebypassmodes=\"yes\"\
+    \n         nosnoticestack=\"no\"\n         welcomenotice=\"yes\">\n\n<performance\
+    \ netbuffersize=\"10240\"\n             maxwho=\"4096\"\n             somaxconn=\"\
+    128\"\n             softlimit=\"12800\"\n             quietbursts=\"yes\"\n  \
+    \           nouserdns=\"no\">\n\n<security allowcoreunload=\"no\"\n          hidewhois=\"\
+    \"\n          hidekills=\"\"\n          hideulinekills=\"yes\"\n          hidesplits=\"\
+    no\"\n          flatlinks=\"no\"\n          hideserver=\"\"\n          hidebans=\"\
+    no\"\n          restrictbannedusers=\"yes\"\n          genericoper=\"no\"\n  \
+    \        userstats=\"Pu\">\n\n<limits maxnick=\"32\"\n        maxchan=\"64\"\n\
+    \        maxmodes=\"20\"\n        maxident=\"11\"\n        maxquit=\"255\"\n \
+    \       maxtopic=\"307\"\n        maxkick=\"255\"\n        maxgecos=\"128\"\n\
+    \        maxaway=\"200\">\n\n<log method=\"file\" type=\"* -USERINPUT -USEROUTPUT\"\
+    \ level=\"default\" target=\"/var/log/inspircd/inspircd.log\">\n\n<oper name=\"\
+    marc\"\n      password=\"changeme\"\n      host=\"*@*\"\n      type=\"NetAdmin\"\
+    >\n\n<type name=\"NetAdmin\"\n      classes=\"OperChat BanControl HostCloak Shutdown\"\
+    \n      vhost=\"quuux.org\"\n      snomask=\"*\"\n      modes=\"+s *\">\n\n<class\
+    \ name=\"OperChat\"   commands=\"WALLOPS GLOBOPS\">\n<class name=\"BanControl\"\
+    \ commands=\"KILL GLINE KLINE ZLINE QLINE ELINE TLINE RLINE CHECK NICKLOCK SHUN\
+    \ CLONES CBAN\">\n<class name=\"HostCloak\"  commands=\"SETHOST SETIDENT SETNAME\
+    \ CHGHOST CHGIDENT\">\n<class name=\"Shutdown\"   commands=\"DIE RESTART REHASH\
+    \ LOADMODULE UNLOADMODULE RELOADMODULE GUNLOADMODULE GRELOADMODULE\">\n\n<module\
+    \ name=\"account\">\n<module name=\"alias\">\n<module name=\"allowinvite\">\n\
+    <module name=\"auditorium\">\n<module name=\"banexception\">\n<module name=\"\
+    botmode\">\n<module name=\"cap\">\n<module name=\"cban\">\n<module name=\"chghost\"\
+    >\n<module name=\"chgident\">\n<module name=\"cloaking\">\n<module name=\"conn_umodes\"\
+    >\n<module name=\"dnsbl\">\n<module name=\"hostcycle\">\n<module name=\"inviteexception\"\
+    >\n<module name=\"ircv3\">\n<module name=\"ircv3_capnotify\">\n<module name=\"\
+    ircv3_ctctags\">\n<module name=\"ircv3_echomessage\">\n<module name=\"ircv3_msgid\"\
+    >\n<module name=\"ircv3_servertime\">\n<module name=\"knock\">\n<module name=\"\
+    messageflood\">\n<module name=\"noctcp\">\n<module name=\"ojoin\">\n<module name=\"\
+    operlog\">\n<module name=\"opermotd\">\n<module name=\"openssl\">\n<module name=\"\
+    password_hash\">\n<module name=\"regex_glob\">\n<module name=\"sasl\">\n<module\
+    \ name=\"securelist\">\n<module name=\"services_account\">\n<module name=\"sha256\"\
+    >\n<module name=\"spanningtree\">\n<module name=\"swhois\">\n<module name=\"timedbans\"\
+    >\n<module name=\"tline\">\n<module name=\"userip\">\n<module name=\"watch\">\n\
+    \n</config>\n"
+- path: /opt/frink/docker-compose.yaml
+  owner: root:root
+  permissions: '0644'
+  content: "version: \"3\"\nservices:\n  cadvisor:\n    container_name: cadvisor\n\
+    \    image: gcr.io/cadvisor/cadvisor\n    volumes:\n      - /:/rootfs:ro\n   \
+    \   - /var/run:/var/run:rw\n      - /sys:/sys:ro\n      - /var/lib/docker/:/var/lib/docker:ro\n\
+    \    ports:\n      - \"8280:8080\"\n    restart: unless-stopped\n    logging:\n\
+    \      driver: loki\n      options:\n        loki-url: \"http://100.82.224.98:3100/loki/api/v1/push\"\
+    \n\n  postgres:\n    image: postgres\n    container_name: postgres\n    restart:\
+    \ unless-stopped\n    volumes:\n      - postgres-data:/var/lib/postgresql/data\n\
+    \    ports:\n      - \"5432:5432\"\n    environment:\n      POSTGRES_PASSWORD:\
+    \ synapse\n      POSTGRES_USER: synapse\n      POSTGRES_DB: synapse\n      POSTGRES_INITDB_ARGS:\
+    \ '--encoding=UTF-8 --lc-collate=C --lc-ctype=C'\n    logging:\n      driver:\
+    \ loki\n      options:\n        loki-url: \"http://100.82.224.98:3100/loki/api/v1/push\"\
+    \n\n  synapse:\n    image: docker.io/matrixdotorg/synapse:latest\n    container_name:\
+    \ synapse\n    restart: unless-stopped\n    environment:\n      - SYNAPSE_CONFIG_PATH=/data/homeserver.yaml\n\
+    \    volumes:\n      - ./synapse:/data\n    ports:\n      - \"8008:8008/tcp\"\n\
+    \      - \"9000:9000/tcp\"\n    depends_on:\n      - postgres\n    logging:\n\
+    \      driver: loki\n      options:\n        loki-url: \"http://100.82.224.98:3100/loki/api/v1/push\"\
+    \n\n  rogue:\n    container_name: rogue\n    build: https://github.com/mdellavo/rogue.git\n\
+    \    ports:\n      - 6543:6543\n\nvolumes:\n  postgres-data:\n"
+- path: /root/setup-certs.sh
+  owner: root:root
+  permissions: '0755'
+  content: "#!/bin/bash\n# Run after DNS is pointed at this instance and has propagated.\n\
+    set -e\n\nEMAIL=\"marc.dellavolpe@gmail.com\"\nCERTS=(\n  \"quuux.org\"\n  \"\
+    liminal.quuux.org\"\n  \"rogue.quuux.org\"\n  \"rogue-api.quuux.org\"\n  \"p.ound.town\"\
+    \n)\n\n# Generate DH params for InspIRCd if not already present\nif [ ! -f /etc/inspircd/dhparams.pem\
+    \ ]; then\n  openssl dhparam -out /etc/inspircd/dhparams.pem 2048\nfi\n\nfor domain\
+    \ in \"${CERTS[@]}\"; do\n  certbot run --nginx -m \"$EMAIL\" --agree-tos -d \"\
+    $domain\"\ndone\n\nsystemctl restart postfix\nsystemctl restart dovecot\nsystemctl\
+    \ restart inspircd\nsystemctl restart nginx\n\necho \"Done. Certs provisioned\
+    \ and services restarted.\"\n"
+- path: /var/www/quuux.org/index.html
+  owner: www-data:www-data
+  permissions: '0644'
+  content: '<html>
+
+    <head><title>quuux.org</title></head>
+
+    <body><h1>quuux.org</h1></body>
+
+    </html>
+
+    '
+- path: /var/www/p.ound.town/index.html
+  owner: www-data:www-data
+  permissions: '0644'
+  content: '<html>
+
+    <head><title>p.ound.town</title></head>
+
+    <body><h1>p.ound.town</h1></body>
+
+    </html>
+
+    '

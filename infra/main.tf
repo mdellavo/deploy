@@ -8,7 +8,7 @@ terraform {
 }
 
 variable "AWS_REGION" {
-    default = "us-east-1"
+  default = "us-east-1"
 }
 
 variable "AWS_AZ" {
@@ -347,6 +347,41 @@ resource "aws_network_acl" "acl-2" {
   vpc_id = aws_vpc.main.id
 }
 
+resource "aws_s3_bucket" "quuux_bootstrap" {
+  bucket = "quuux-bootstrap"
+}
+
+resource "aws_s3_bucket_public_access_block" "quuux_bootstrap" {
+  bucket                  = aws_s3_bucket.quuux_bootstrap.id
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "quuux_bootstrap" {
+  bucket     = aws_s3_bucket.quuux_bootstrap.id
+  depends_on = [aws_s3_bucket_public_access_block.quuux_bootstrap]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "s3:GetObject"
+      Resource  = "${aws_s3_bucket.quuux_bootstrap.arn}/*"
+    }]
+  })
+}
+
+resource "aws_s3_object" "ralph_cloud_init" {
+  bucket       = aws_s3_bucket.quuux_bootstrap.id
+  key          = "ralph-cloud-init.yaml"
+  content      = file("../ralph/cloud-init.yaml")
+  content_type = "text/cloud-config"
+  etag         = filemd5("../ralph/cloud-init.yaml")
+}
+
 resource "aws_instance" "ralph" {
   ami                         = "ami-0bcb08446fd149731"
   associate_public_ip_address = "true"
@@ -379,7 +414,7 @@ resource "aws_instance" "ralph" {
 
   metadata_options {
     http_endpoint               = "enabled"
-    http_put_response_hop_limit = "1"
+    http_put_response_hop_limit = "3"
     http_tokens                 = "optional"
     instance_metadata_tags      = "disabled"
   }
@@ -405,10 +440,63 @@ resource "aws_instance" "ralph" {
     Name = "Ralph"
   }
 
-  tenancy                = "default"
+  user_data = <<-EOF
+    Content-Type: multipart/mixed; boundary="==RALPH-BOOTSTRAP=="
+    MIME-Version: 1.0
+
+    --==RALPH-BOOTSTRAP==
+    Content-Type: text/x-include-url
+
+    https://${aws_s3_bucket.quuux_bootstrap.id}.s3.${var.AWS_REGION}.amazonaws.com/${aws_s3_object.ralph_cloud_init.key}
+    --==RALPH-BOOTSTRAP==--
+  EOF
+  iam_instance_profile = aws_iam_instance_profile.ralph.name
+  tenancy              = "default"
   vpc_security_group_ids = [
     aws_security_group.frink-sg.id
   ]
+}
+
+resource "aws_iam_role" "ralph" {
+  name = "ralph"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ralph" {
+  name = "ralph"
+  role = aws_iam_role.ralph.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "rds:DescribeDBClusters",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBLogFiles",
+        "rds:DescribeDBMajorEngineVersions",
+        "rds:DescribePendingMaintenanceActions",
+        "cloudwatch:GetMetricData",
+        "ec2:DescribeInstanceTypes",
+        "servicequotas:GetServiceQuota",
+        "tag:GetResources",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_iam_instance_profile" "ralph" {
+  name = "ralph"
+  role = aws_iam_role.ralph.name
 }
 
 resource "aws_eip" "ip-ralph" {
@@ -428,23 +516,23 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_instance" "postgres" {
-  allocated_storage           = 20
-  storage_type               = "gp2"
-  engine                     = "postgres"
-  engine_version             = "17.5"
-  instance_class             = "db.t4g.micro"
-  identifier                 = "postgres"
-  username                   = "postgres"
-  password                   = "postgrespassword"
-  availability_zone          = var.AWS_AZ
-  db_subnet_group_name       = aws_db_subnet_group.main.name
-  vpc_security_group_ids     = [aws_security_group.frink-sg.id]
-  backup_retention_period    = 0
-  multi_az                   = false
-  publicly_accessible        = false
-  storage_encrypted          = false
-  skip_final_snapshot        = true
-  deletion_protection        = false
+  allocated_storage       = 20
+  storage_type            = "gp2"
+  engine                  = "postgres"
+  engine_version          = "17.5"
+  instance_class          = "db.t4g.micro"
+  identifier              = "postgres"
+  username                = "postgres"
+  password                = "postgrespassword"
+  availability_zone       = var.AWS_AZ
+  db_subnet_group_name    = aws_db_subnet_group.main.name
+  vpc_security_group_ids  = [aws_security_group.frink-sg.id]
+  backup_retention_period = 0
+  multi_az                = false
+  publicly_accessible     = false
+  storage_encrypted       = false
+  skip_final_snapshot     = true
+  deletion_protection     = false
 
   tags = {
     Name = "PostgreSQL Database"
@@ -454,8 +542,8 @@ resource "aws_db_instance" "postgres" {
 # S3 Buckets
 
 resource "aws_s3_bucket" "logs-quuux" {
-  arn                 = "arn:aws:s3:::logs-quuux"
-  bucket              = "logs-quuux"
+  arn    = "arn:aws:s3:::logs-quuux"
+  bucket = "logs-quuux"
 }
 
 // marcdellavolpe.com
@@ -565,22 +653,6 @@ resource "aws_route53_record" "dns-rogue-api-quuux-org-a" {
 
 // Tailscale IPs
 
-resource "aws_route53_record" "dns-mojo-ts-quuux-org-a" {
-  name    = "mojo.ts.quuux.org"
-  records = ["100.82.224.98"]
-  ttl     = "60"
-  type    = "A"
-  zone_id = aws_route53_zone.zone-quuux-org.zone_id
-}
-
-resource "aws_route53_record" "dns-atomic-ts-quuux-org-a" {
-  name    = "atomic.ts.quuux.org"
-  records = ["100.89.171.89"]
-  ttl     = "60"
-  type    = "A"
-  zone_id = aws_route53_zone.zone-quuux-org.zone_id
-}
-
 resource "aws_route53_record" "dns-synology-ts-quuux-org-a" {
   name    = "synology.ts.quuux.org"
   records = ["100.106.167.130"]
@@ -589,30 +661,24 @@ resource "aws_route53_record" "dns-synology-ts-quuux-org-a" {
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
 }
 
-resource "aws_route53_record" "dns-lisa-ts-quuux-org-a" {
-  name    = "lisa.ts.quuux.org"
-  records = ["100.107.92.17"]
+resource "aws_route53_record" "dns-apu-ts-quuux-org-a" {
+  name    = "apu.ts.quuux.org"
+  records = ["100.94.127.113"]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
 }
 
-resource "aws_route53_record" "dns-maggie-ts-quuux-org-a" {
-  name    = "maggie.ts.quuux.org"
-  records = ["100.109.254.49"]
+resource "aws_route53_record" "dns-ralph-ts-quuux-org-a" {
+  name    = "ralph.ts.quuux.org"
+  records = ["100.98.138.119"]
   ttl     = "60"
   type    = "A"
   zone_id = aws_route53_zone.zone-quuux-org.zone_id
 }
 
-resource "aws_route53_record" "dns-marge-ts-quuux-org-a" {
-  name    = "marge.ts.quuux.org"
-  records = ["100.70.223.52"]
-  ttl     = "60"
-  type    = "A"
-  zone_id = aws_route53_zone.zone-quuux-org.zone_id
-}
 
+// S3 websites
 module "liminal-quuux-org" {
   source = "./modules/s3-website"
   bucket = "liminal.quuux.org"
@@ -668,88 +734,6 @@ resource "aws_route53_record" "dns-terminaljunkie-lol-a" {
 
 // Sites
 
-resource "aws_route53_zone" "zone-fucknorcross-com" {
-  name = "fucknorcross.com"
-}
-
-resource "aws_route53_record" "dns-fucknorcross-com-a" {
-  name    = "fucknorcross.com"
-  type    = "A"
-  ttl     = "60"
-  records = [aws_eip.ip-ralph.public_ip]
-  zone_id = aws_route53_zone.zone-fucknorcross-com.zone_id
-}
-
-resource "aws_route53_zone" "zone-fucksweeney-com" {
-  name = "fucksweeney.com"
-}
-
-resource "aws_route53_record" "dns-fucksweeney-com-a" {
-  name    = "fucksweeney.com"
-  type    = "A"
-  ttl     = "60"
-  records = [aws_eip.ip-ralph.public_ip]
-  zone_id = aws_route53_zone.zone-fucksweeney-com.zone_id
-}
-
-module "fucknorcross-com" {
-  source = "./modules/s3-website"
-  bucket = "fucknorcross.com"
-
-}
-
-module "fucksweeney-com" {
-  source = "./modules/s3-website"
-  bucket = "fucksweeney.com"
-}
-
-resource "aws_route53_record" "dns-fucknorcross-com-ns" {
-  name    = "fucknorcross.com"
-  records = [
-    "ns-1342.awsdns-39.org.",
-    "ns-1860.awsdns-40.co.uk.",
-    "ns-50.awsdns-06.com.",
-    "ns-513.awsdns-00.net.",
-  ]
-  ttl     = 172800
-  type    = "NS"
-  zone_id = aws_route53_zone.zone-fucknorcross-com.zone_id
-}
-
-resource "aws_route53_record" "dns-fucknorcross-com-soa" {
-  name    = "fucknorcross.com"
-  records = [
-    "ns-513.awsdns-00.net. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400",
-  ]
-  ttl     = 900
-  type    = "SOA"
-  zone_id = aws_route53_zone.zone-fucknorcross-com.zone_id
-}
-
-resource "aws_route53_record" "dns-fucksweeney-com-ns" {
-  name    = "fucksweeney.com"
-  records = [
-    "ns-1323.awsdns-37.org.",
-    "ns-2033.awsdns-62.co.uk.",
-    "ns-325.awsdns-40.com.",
-    "ns-938.awsdns-53.net.",
-  ]
-  ttl     = 172800
-  type    = "NS"
-  zone_id = aws_route53_zone.zone-fucksweeney-com.zone_id
-}
-
-resource "aws_route53_record" "dns-fucksweeney-com-soa" {
-  name    = "fucksweeney.com"
-  records = [
-    "ns-2033.awsdns-62.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400",
-  ]
-  ttl     = 900
-  type    = "SOA"
-  zone_id = aws_route53_zone.zone-fucksweeney-com.zone_id
-}
-
-
 resource "aws_route53_record" "dns-ound-town-ns" {
   name    = "ound.town"
   records = ["ns-1432.awsdns-51.org.", "ns-1609.awsdns-09.co.uk.", "ns-330.awsdns-41.com.", "ns-910.awsdns-49.net."]
@@ -767,7 +751,7 @@ resource "aws_route53_record" "dns-ound-town-soa" {
 }
 
 resource "aws_route53_record" "dns-marcdellavolpe-com-ns" {
-  name    = "marcdellavolpe.com"
+  name = "marcdellavolpe.com"
   records = [
     "ns-1409.awsdns-48.org.",
     "ns-1711.awsdns-21.co.uk.",
@@ -780,7 +764,7 @@ resource "aws_route53_record" "dns-marcdellavolpe-com-ns" {
 }
 
 resource "aws_route53_record" "dns-marcdellavolpe-com-soa" {
-  name    = "marcdellavolpe.com"
+  name = "marcdellavolpe.com"
   records = [
     "ns-364.awsdns-45.com. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400",
   ]
@@ -791,7 +775,7 @@ resource "aws_route53_record" "dns-marcdellavolpe-com-soa" {
 
 
 resource "aws_route53_record" "dns-quuux-org-ns" {
-  name    = "quuux.org"
+  name = "quuux.org"
   records = [
     "ns-1346.awsdns-40.org.",
     "ns-141.awsdns-17.com.",
@@ -804,7 +788,7 @@ resource "aws_route53_record" "dns-quuux-org-ns" {
 }
 
 resource "aws_route53_record" "dns-quuux-org-soa" {
-  name    = "quuux.org"
+  name = "quuux.org"
   records = [
     "ns-141.awsdns-17.com. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400",
   ]

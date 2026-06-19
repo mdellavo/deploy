@@ -1,0 +1,93 @@
+package_update: true
+package_upgrade: true
+
+debconf_selections: |
+  postfix postfix/main_mailer_type select Internet Site
+  postfix postfix/mailname string quuux.org
+
+packages:
+  - man-db
+  - logrotate
+  - vim
+  - sudo
+  - bash-completion
+  - tmux
+  - ntp
+  - wget
+  - curl
+  - emacs-nox
+  - build-essential
+  - git
+  - jq
+  - mailutils
+  - nginx
+  - certbot
+  - python3-certbot-nginx
+  - postfix
+  - dovecot-core
+  - dovecot-imapd
+  - dovecot-pop3d
+  - dovecot-lmtpd
+  - inspircd
+  - openssl
+  - bpytop
+  - tree
+  - strace
+  - gdb
+  - htop
+  - dnsutils
+
+runcmd:
+  # Docker — official apt repo
+  - apt-get install -y ca-certificates curl gnupg
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  - chmod a+r /etc/apt/keyrings/docker.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+  # Tailscale — official apt repo
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/$(lsb_release -cs).gpg | gpg --dearmor -o /etc/apt/keyrings/tailscale.gpg
+  - echo "deb [signed-by=/etc/apt/keyrings/tailscale.gpg] https://pkgs.tailscale.com/stable/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/tailscale.list
+  - apt-get update
+  - apt-get install -y tailscale
+
+  # Docker daemon and loki logging plugin
+  - systemctl enable --now docker
+  - docker plugin install grafana/loki-docker-driver:latest --alias loki --grant-all-permissions
+
+  # Nginx — remove default site, set up directories and symlinks
+  - rm -f /etc/nginx/sites-enabled/default
+  - mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/conf.d
+  - mkdir -p /var/www/quuux.org /var/www/p.ound.town
+  - chown -R www-data:www-data /var/www
+  - ln -sf /etc/nginx/sites-available/quuux.org /etc/nginx/sites-enabled/quuux.org
+  - ln -sf /etc/nginx/sites-available/p.ound.town /etc/nginx/sites-enabled/p.ound.town
+  - ln -sf /etc/nginx/sites-available/liminal.quuux.org /etc/nginx/sites-enabled/liminal.quuux.org
+  - ln -sf /etc/nginx/sites-available/rogue.quuux.org /etc/nginx/sites-enabled/rogue.quuux.org
+  - ln -sf /etc/nginx/sites-available/rogue-api.quuux.org /etc/nginx/sites-enabled/rogue-api.quuux.org
+  # nginx starts after certs — run /root/setup-certs.sh once DNS is live
+  - systemctl enable nginx
+
+  # Postfix
+  - echo "quuux.org" > /etc/mailname
+  - postmap /etc/postfix/virtual
+  - newaliases
+  - systemctl enable postfix
+
+  # Dovecot
+  - systemctl enable --now dovecot
+
+  # InspIRCd
+  - systemctl enable --now inspircd
+
+  # Tailscale (connect after boot: tailscale up --authkey=<key>)
+  - systemctl enable --now tailscaled
+
+  # NTP
+  - systemctl enable --now ntp
+
+  # Docker Compose stack (loki containers need Tailscale connected first)
+  - mkdir -p /opt/frink/synapse
+  - cd /opt/frink && docker compose up -d
